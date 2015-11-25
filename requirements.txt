@@ -1,0 +1,7 @@
+flask
+flask-restful
+Flask-Testing
+nose
+httpretty
+coveralls
+requests==2.7.0

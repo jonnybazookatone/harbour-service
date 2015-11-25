@@ -1,0 +1,7 @@
+.cache
+*pyc
+local_config.py
+.vagrant
+logs/
+*.idea*
+.coverage
