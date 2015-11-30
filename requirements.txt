@@ -1,7 +1,9 @@
 flask
 flask-restful
 Flask-Testing
+flask-discoverer
+flask-consulate==0.1.2
 nose
-httpretty
 coveralls
 requests==2.7.0
+httmock==1.2.3
