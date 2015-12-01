@@ -10,7 +10,7 @@ from utils import get_post_data, err
 from flask import current_app, request
 from flask.ext.restful import Resource
 from flask.ext.discoverer import advertise
-from models import Users
+from models import db, Users
 from http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, \
     CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, MYADS_TIMEOUT, MYADS_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
 from sqlalchemy.orm.exc import NoResultFound
@@ -18,26 +18,20 @@ from sqlalchemy.orm.exc import NoResultFound
 USER_ID_KEYWORD = 'X-Adsws-Uid'
 
 
-class ClassicLibraries(Resource):
+class BaseView(Resource):
     """
-    End point to collect the user's ADS classic libraries with the external ADS Classic end point
+    A base view class to keep a single version of common functions used between
+    all of the views.
     """
-
     @staticmethod
-    def helper_get_user():
+    def helper_get_user_id():
         """
         Helper function: get the user id from the header, otherwise raise
         a key error exception
         :return: unique API user ID
         """
         try:
-            uid = int(request.headers[USER_ID_KEYWORD])
-            current_app.logger.info('Looking up user: {}'.format(uid))
-
-            user = Users.query.filter(Users.absolute_uid == uid).one()
-            current_app.logger.info('Corresponds to: {}'.format(user))
-
-            return user
+            return int(request.headers[USER_ID_KEYWORD])
 
         except KeyError:
             current_app.logger.error('No username passed')
@@ -47,9 +41,14 @@ class ClassicLibraries(Resource):
             current_app.logger.error('Unknow error with API')
             raise
 
-        except:
-            current_app.logger.error('User does not exist: {}'.format(request.headers[USER_ID_KEYWORD]))
-            raise
+class ClassicLibraries(BaseView):
+    """
+    End point to collect the user's ADS classic libraries with the external ADS Classic end point
+    """
+
+    decorators = [advertise('scopes', 'rate_limit')]
+    scopes = ['user']
+    rate_limit = [1000, 60*60*24]
 
     def get(self):
         """
@@ -73,8 +72,10 @@ class ClassicLibraries(Resource):
         Any other responses will be default Flask errors
         """
 
+        user_uid = self.helper_get_user_id()
+
         try:
-            user = self.helper_get_user()
+            user = Users.query.filter(Users.absolute_uid == user_uid).one()
         except NoResultFound:
             current_app.logger.warning('User does not have an associated ADS Classic account')
             return err(NO_CLASSIC_ACCOUNT)
@@ -103,7 +104,7 @@ class ClassicLibraries(Resource):
         return {'libraries': libraries}, 200
 
 
-class AuthenticateUser(Resource):
+class AuthenticateUser(BaseView):
     """
     End point to authenticate the user's ADS classic credentials with the external ADS Classic end point
     """
@@ -129,14 +130,15 @@ class AuthenticateUser(Resource):
         -------------------------
         classic_authed: <boolean> were they authenticated
         classic_email: <string> e-mail that authenticated correctly
+        classic_mirror: <string> ADS Classic mirror this user selected
 
         HTTP Responses:
         --------------
         Succeed authentication: 200
         Bad/malformed data: 400
         User unknown/wrong password/failed authentication: 404
-        myADS/ADS Classic give unknown messages: 500
-        myADS/ADS Classic times out: 504
+        ADS Classic give unknown messages: 500
+        ADS Classic times out: 504
 
         Any other responses will be default Flask errors
         """
@@ -201,30 +203,31 @@ class AuthenticateUser(Resource):
                 current_app.logger.warning('Classic returned no cookie, cannot continue: {}'.format(response.json()))
                 return err(CLASSIC_NO_COOKIE)
 
-            myads_payload = {'classic_cookie': cookie}
+            absolute_uid = self.helper_get_user_id()
             try:
-                myads_response = client().post(current_app.config['CLASSIC_MYADS_USER_DATA_URL'], data=myads_payload)
-            except requests.exceptions.Timeout:
-                current_app.logger.warning('myADS end point timed out, returning to user')
-                return err(MYADS_TIMEOUT)
+                user = Users.query.filter(Users.absolute_uid == absolute_uid).one()
+                current_app.logger.info('User already exists in database')
+                user.classic_mirror = classic_mirror
+                user.classic_cookie = cookie
+                user.classic_email = classic_email
+            except NoResultFound:
+                current_app.logger.info('Creating entry in database for user')
+                user = Users(
+                    absolute_uid=absolute_uid,
+                    classic_cookie=cookie,
+                    classic_email=classic_email,
+                    classic_mirror=classic_mirror
+                )
 
-            if myads_response.status_code != 200:
-                current_app.logger.warning('myADS end point returned unknown error: "{}", {}'
-                                           .format(myads_response.text, myads_response.status_code))
-                message, status_code = err(MYADS_UNKNOWN_ERROR)
+            db.session.add(user)
+            db.session.commit()
 
-                message['myads'] = {
-                    'message': myads_response.text,
-                    'status_code': int(myads_response.status_code)
-                }
-
-                return message, status_code
-
-            current_app.logger.info('Successfully saved content for "{}" to myADS: {{"cookie": "{}"}}'
-                                    .format(classic_email, '*'*len(myads_response.json()['classic_cookie'])))
+            current_app.logger.info('Successfully saved content for "{}" to database: {{"cookie": "{}"}}'
+                                    .format(classic_email, '*'*len(user.classic_cookie)))
 
             return {
                 'classic_email': email,
+                'classic_mirror': classic_mirror,
                 'classic_authed': True
             }, 200
         else:
