@@ -34,6 +34,11 @@ CLASSIC_TIMEOUT = dict(
     code=504
 )
 
+NO_CLASSIC_ACCOUNT = dict(
+    message='This user has not setup an ADS Classic account',
+    code=400
+)
+
 MYADS_TIMEOUT = dict(
     message='ADSWS myADS end point timed out before it could respond (> 30s)',
     code=504

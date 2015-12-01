@@ -10,8 +10,97 @@ from utils import get_post_data, err
 from flask import current_app, request
 from flask.ext.restful import Resource
 from flask.ext.discoverer import advertise
+from models import Users
 from http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, \
-    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, MYADS_TIMEOUT, MYADS_UNKNOWN_ERROR
+    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, MYADS_TIMEOUT, MYADS_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
+from sqlalchemy.orm.exc import NoResultFound
+
+USER_ID_KEYWORD = 'X-Adsws-Uid'
+
+
+class ClassicLibraries(Resource):
+    """
+    End point to collect the user's ADS classic libraries with the external ADS Classic end point
+    """
+
+    @staticmethod
+    def helper_get_user():
+        """
+        Helper function: get the user id from the header, otherwise raise
+        a key error exception
+        :return: unique API user ID
+        """
+        try:
+            uid = int(request.headers[USER_ID_KEYWORD])
+            current_app.logger.info('Looking up user: {}'.format(uid))
+
+            user = Users.query.filter(Users.absolute_uid == uid).one()
+            current_app.logger.info('Corresponds to: {}'.format(user))
+
+            return user
+
+        except KeyError:
+            current_app.logger.error('No username passed')
+            raise
+
+        except ValueError:
+            current_app.logger.error('Unknow error with API')
+            raise
+
+        except:
+            current_app.logger.error('User does not exist: {}'.format(request.headers[USER_ID_KEYWORD]))
+            raise
+
+    def get(self):
+        """
+        HTTP GET request that contacts the ADS Classic libraries end point to obtain all the libraries relevant to that
+        user.
+
+        Return data (on success)
+        ------------------------
+        libraries: <list<dict>> a list of dictionaries, that contains the following for each library entry:
+            name: <string> name of the library
+            description: <string> description of the library
+            documents: <list<string>> list of documents
+
+        HTTP Responses:
+        --------------
+        Succeed getting libraries: 200
+        User does not have a classic account: 400
+        ADS Classic give unknown messages: 500
+        ADS Classic times out: 504
+
+        Any other responses will be default Flask errors
+        """
+
+        try:
+            user = self.helper_get_user()
+        except NoResultFound:
+            current_app.logger.warning('User does not have an associated ADS Classic account')
+            return err(NO_CLASSIC_ACCOUNT)
+
+        url = current_app.config['ADS_CLASSIC_LIBRARIES_URL'].format(
+            mirror=user.classic_mirror,
+            cookie=user.classic_cookie
+        )
+
+        current_app.logger.debug('Obtaining libraries via: {}'.format(url))
+        try:
+            response = requests.get(url)
+        except requests.exceptions.Timeout:
+            current_app.logger.warning('ADS Classic timed out before finishing: {}'.format(url))
+            return err(CLASSIC_TIMEOUT)
+
+        if response.status_code != 200:
+            current_app.logger.warning('ADS Classic returned an unkown status code: "{}" [code: {}]'
+                                       .format(response.text, response.status_code))
+            return err(CLASSIC_UNKNOWN_ERROR)
+
+        data = response.json()
+
+        libraries = [dict(name=i['name'], description=i['desc'], documents=[j['bibcode'] for j in i['entries']]) for i in data['libraries']]
+
+        return {'libraries': libraries}, 200
 
 
 class AuthenticateUser(Resource):
@@ -36,7 +125,7 @@ class AuthenticateUser(Resource):
         classic_password: <string> ADS Classic password of the user
         classic_mirror: <string> ADS Classic mirror this user belongs to
 
-        Return data (on succeed):
+        Return data (on success):
         -------------------------
         classic_authed: <boolean> were they authenticated
         classic_email: <string> e-mail that authenticated correctly
@@ -46,8 +135,8 @@ class AuthenticateUser(Resource):
         Succeed authentication: 200
         Bad/malformed data: 400
         User unknown/wrong password/failed authentication: 404
-        myADS/ADS Classic times out: 504
         myADS/ADS Classic give unknown messages: 500
+        myADS/ADS Classic times out: 504
 
         Any other responses will be default Flask errors
         """

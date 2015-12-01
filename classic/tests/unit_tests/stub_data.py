@@ -101,3 +101,38 @@ stub_classic_no_cookie = {
         "man_cmd": "4"
         }
 }
+
+stub_classic_libraries_success = {
+    'count': '2',
+    'libraries': [
+        {
+            'desc': 'Description',
+            'entries': [
+                {
+                    'bibcode': '2015MNRAS.446.4239E'
+                },
+                {
+                    'bibcode': '2015A&C....10...61E'
+                },
+                {
+                    'bibcode': '2014A&A...562A.100E'
+                },
+                {
+                    'bibcode': '2013A&A...556A..23E'
+                }
+            ],
+            'lastmod': '01-Dec-2015',
+            'name': 'Name'
+        }
+    ],
+    'owner': 'Owner',
+    'pubid': 'ID',
+    'status': {
+        'cookie': 'ef9df8ds',
+        'libfile': '/file/on/disk',
+        'query_string': 'cookie=ef9df8ds',
+        'server': 'server',
+        'timestamp': 'Tue Dec  1 11:37:39 2015'
+    },
+    'uid': 'ID'
+}
