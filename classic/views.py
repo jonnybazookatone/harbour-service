@@ -12,7 +12,7 @@ from flask.ext.restful import Resource
 from flask.ext.discoverer import advertise
 from models import db, Users
 from http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, \
-    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, MYADS_TIMEOUT, MYADS_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
+    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
 from sqlalchemy.orm.exc import NoResultFound
 
 USER_ID_KEYWORD = 'X-Adsws-Uid'
@@ -40,6 +40,46 @@ class BaseView(Resource):
         except ValueError:
             current_app.logger.error('Unknow error with API')
             raise
+
+
+class ClassicUser(BaseView):
+    """
+    End point to collect the user's ADS Classic information currently stored in the database
+    """
+
+    decorators = [advertise('scopes', 'rate_limit')]
+    scopes = ['user']
+    rate_limit = [1000, 60*60*24]
+
+    def get(self):
+        """
+        HTTP GET request that returns the information currently stored about the user's ADS Classic settings, currently
+        stored in the service database.
+
+        Return data (on success)
+        ------------------------
+        classic_email: <string> ADS Classic e-mail of the user
+        classic_mirror: <string> ADS Classic mirror this user belongs to
+
+        HTTP Responses:
+        --------------
+        Succeed authentication: 200
+        User unknown/wrong password/failed authentication: 404
+
+        Any other responses will be default Flask errors
+        """
+
+        absolute_uid = self.helper_get_user_id()
+
+        try:
+            user = Users.query.filter(Users.absolute_uid == absolute_uid).one()
+            return {
+                'classic_email': user.classic_email,
+                'classic_mirror': user.classic_mirror
+            }, 200
+        except NoResultFound:
+            return err(NO_CLASSIC_ACCOUNT)
+
 
 class ClassicLibraries(BaseView):
     """
