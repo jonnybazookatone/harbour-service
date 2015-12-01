@@ -11,7 +11,7 @@ from classic.models import db, Users
 from classic.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR,\
     CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, MYADS_TIMEOUT, MYADS_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
 from stub_response import ads_classic_200, ads_classic_unknown_user, ads_classic_wrong_password, ads_classic_no_cookie,\
-    ads_classic_fail, myads_200, myads_fail, ads_classic_libraries_200
+    ads_classic_fail, ads_classic_libraries_200
 from httmock import HTTMock
 from requests.exceptions import Timeout
 
@@ -19,10 +19,23 @@ from requests.exceptions import Timeout
 USER_ID_KEYWORD = 'X-Adsws-Uid'
 
 
-class TestEndpoints(TestCase):
+class TestBaseDatabase(TestCase):
     """
-    Tests http endpoints
+    Base test class for when databases are being used.
     """
+    postgresql_url_dict = {
+        'port': 1234,
+        'host': '127.0.0.1',
+        'user': 'postgres',
+        'database': 'test'
+    }
+    postgresql_url = 'postgresql://{user}@{host}:{port}/{database}'\
+        .format(
+            user=postgresql_url_dict['user'],
+            host=postgresql_url_dict['host'],
+            port=postgresql_url_dict['port'],
+            database=postgresql_url_dict['database']
+        )
 
     def create_app(self):
         """
@@ -30,27 +43,56 @@ class TestEndpoints(TestCase):
         """
         app_ = app.create_app()
         app_.config['CLASSIC_LOGGING'] = {}
-        app_.config['ADS_CLASSIC_MIRROR_LIST'] = ['mirror.com']
-        app_.config['CLASSIC_MYADS_USER_DATA_URL'] = 'http://myads.net'
+        app_.config['SQLALCHEMY_BINDS'] = {}
+        app_.config['ADS_CLASSIC_MIRROR_LIST'] = ['mirror.com', 'other.mirror.com']
+        app_.config['SQLALCHEMY_BINDS']['imports'] = TestBaseDatabase.postgresql_url
+
         return app_
 
+    @classmethod
+    def setUpClass(cls):
+        cls.postgresql = \
+            testing.postgresql.Postgresql(**cls.postgresql_url_dict)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.postgresql.stop()
+
     def setUp(self):
+        """
+        Set up the database for use
+        """
+        db.create_all()
         self.stub_user_data = {
             'classic_email': 'user@ads.com',
             'classic_password': 'password',
             'classic_mirror': 'mirror.com'
         }
 
+    def tearDown(self):
+        """
+        Remove/delete the database and the relevant connections
+        """
+        db.session.remove()
+        db.drop_all()
+
+
+class TestAuthenticateUser(TestBaseDatabase):
+    """
+    Tests http endpoints
+    """
+
     def test_user_authentication_success(self):
         """
         Tests the end point of a user authenticating their ADS credentials via the web app
         """
+
         # 1. The user fills in their credentials
         # 2. The user submits their credentials to the end point
         url = url_for('AuthenticateUser'.lower())
 
-        with HTTMock(ads_classic_200) as ads, HTTMock(myads_200) as myads:
-            r = self.client.post(url, data=self.stub_user_data)
+        with HTTMock(ads_classic_200):
+            r = self.client.post(url, data=self.stub_user_data, headers={USER_ID_KEYWORD: 10})
 
         self.assertStatus(r, 200)
 
@@ -59,6 +101,74 @@ class TestEndpoints(TestCase):
             self.stub_user_data['classic_email']
         )
         self.assertTrue(r.json['classic_authed'])
+
+        user = Users.query.filter(Users.absolute_uid == 10).one()
+        self.assertEqual(user.classic_email, self.stub_user_data['classic_email'])
+        self.assertEqual(user.classic_mirror, self.stub_user_data['classic_mirror'])
+        self.assertIsInstance(user.classic_cookie, unicode)
+
+    def test_user_authentication_success_if_user_already_exists(self):
+        """
+        Tests the end point of a user authenticating their ADS credentials via the web app, assuming that they have
+        previously set something before
+        """
+        # Stub out the user in the database
+        user = Users(
+            absolute_uid=10,
+            classic_email='before@ads.com',
+            classic_cookie='some cookie',
+            classic_mirror='other.mirror.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # 1. The user fills in their credentials
+        # 2. The user submits their credentials to the end point
+        url = url_for('AuthenticateUser'.lower())
+
+        with HTTMock(ads_classic_200):
+            r = self.client.post(url, data=self.stub_user_data, headers={USER_ID_KEYWORD: 10})
+
+        self.assertStatus(r, 200)
+
+        self.assertEqual(
+            r.json['classic_email'],
+            self.stub_user_data['classic_email']
+        )
+        self.assertTrue(r.json['classic_authed'])
+
+        r_user = Users.query.filter(Users.absolute_uid == 10).one()
+
+        self.assertEqual(r_user.classic_email, self.stub_user_data['classic_email'])
+        self.assertEqual(r_user.classic_mirror, self.stub_user_data['classic_mirror'])
+        self.assertIsInstance(r_user.classic_cookie, unicode)
+
+    def test_user_authentication_fails_when_user_already_exists(self):
+        """
+        Tests the end point of a user authenticating their ADS credentials via the web app, assuming that they have
+        previously set something before. This is the scenario in which there is a failure, the credentials remain the
+        same in the database
+        """
+        # Stub out the user in the database
+        user = Users(
+            absolute_uid=10,
+            classic_email='before@ads.com',
+            classic_cookie='some cookie',
+            classic_mirror='other.mirror.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # 1. The user fills in their credentials
+        # 2. The user submits their credentials to the end point
+        url = url_for('AuthenticateUser'.lower())
+
+        for fail_response in [ads_classic_fail, ads_classic_no_cookie, ads_classic_unknown_user, ads_classic_wrong_password]:
+            with HTTMock(fail_response):
+                self.client.post(url, data=self.stub_user_data, headers={USER_ID_KEYWORD: 10})
+
+            r_user = Users.query.filter(Users.absolute_uid == 10).one()
+            self.assertEqual(r_user, user)
 
     def test_user_authentication_unknown_user(self):
         """
@@ -166,7 +276,7 @@ class TestEndpoints(TestCase):
         """
         url = url_for('authenticateuser')
 
-        with HTTMock(ads_classic_fail) as ads:
+        with HTTMock(ads_classic_fail):
             r = self.client.post(url, data=self.stub_user_data)
 
         self.assertStatus(r, CLASSIC_UNKNOWN_ERROR['code'])
@@ -176,94 +286,12 @@ class TestEndpoints(TestCase):
         self.assertIn('message', r.json['ads_classic'])
         self.assertIn('status_code', r.json['ads_classic'])
 
-    @mock.patch('classic.views.client')
-    def test_myads_timesout(self, mocked_client):
-        """
-        In the scenario myADS times out before responding, we need to inform the user
-        """
-        client_instance = mocked_client.return_value
-        client_instance.post.side_effect = Timeout
 
-        url = url_for('authenticateuser')
-
-        with HTTMock(ads_classic_200):
-            r = self.client.post(url, data=self.stub_user_data)
-
-        self.assertStatus(r, MYADS_TIMEOUT['code'])
-        self.assertEqual(r.json['error'], MYADS_TIMEOUT['message'])
-
-    def test_myads_any_non_200_fail_response(self):
-        """
-        Test that the error message for an unknown error from myADS is returned. When we know the exact errors, this
-        message can be updated to be more specific
-        """
-        url = url_for('authenticateuser')
-
-        with HTTMock(ads_classic_200) as ads, HTTMock(myads_fail) as myads:
-            r = self.client.post(url, data=self.stub_user_data)
-
-        self.assertStatus(r, MYADS_UNKNOWN_ERROR['code'])
-        self.assertIn(MYADS_UNKNOWN_ERROR['message'], r.json['error'])
-
-        self.assertIn('myads', r.json)
-        self.assertIn('message', r.json['myads'])
-        self.assertIn('status_code', r.json['myads'])
-
-
-class TestClassicLibrariesEndpoint(TestCase):
+class TestClassicLibraries(TestBaseDatabase):
     """
-    Test class for GET end point to acquire libraries
+    Tests the libraries end point that returns the libraries from ADS classic that belong to a user
     """
-    postgresql_url_dict = {
-        'port': 1234,
-        'host': '127.0.0.1',
-        'user': 'postgres',
-        'database': 'test'
-    }
-    postgresql_url = 'postgresql://{user}@{host}:{port}/{database}'\
-        .format(
-            user=postgresql_url_dict['user'],
-            host=postgresql_url_dict['host'],
-            port=postgresql_url_dict['port'],
-            database=postgresql_url_dict['database']
-        )
-
-    def create_app(self):
-        """
-        Create the wsgi application
-        """
-        app_ = app.create_app()
-        app_.config['CLASSIC_LOGGING'] = {}
-        app_.config['SQLALCHEMY_BINDS'] = {}
-        app_.config['ADS_CLASSIC_MIRROR_LIST'] = ['mirror.com']
-        app_.config['SQLALCHEMY_BINDS']['imports'] = TestClassicLibrariesEndpoint.postgresql_url
-
-        return app_
-
-    @classmethod
-    def setUpClass(cls):
-        cls.postgresql = \
-            testing.postgresql.Postgresql(**cls.postgresql_url_dict)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.postgresql.stop()
-
-    def setUp(self):
-        """
-        Set up the database for use
-        """
-        db.create_all()
-
-    def tearDown(self):
-        """
-        Remove/delete the database and the relevant connections
-        """
-        db.session.remove()
-        db.drop_all()
-
-    @mock.patch('classic.views.request')
-    def test_get_libraries_end_point(self, mocked_request):
+    def test_get_libraries_end_point(self):
         """
         Test the workflow of successfully retrieving a set of classic libraries
         """
@@ -282,9 +310,12 @@ class TestClassicLibrariesEndpoint(TestCase):
         # 1. The user is identified via header information
         # - Generate dummy user in database
         # - Give the header the correct information
-        headers = {USER_ID_KEYWORD: 10}
-        mocked_request.headers = headers
-        user = Users(absolute_uid=10, classic_cookie='ef9df8ds', classic_mirror='mirror.com')
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user@ads.com'
+        )
         db.session.add(user)
         db.session.commit()
 
@@ -292,36 +323,33 @@ class TestClassicLibrariesEndpoint(TestCase):
         # 3. The ADS Classic end point is contacted, returning a 200, and the content returned
         url = url_for('classiclibraries')
         with HTTMock(ads_classic_libraries_200):
-            r = self.client.get(url)
+            r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
         self.assertStatus(r, 200)
         self.assertEqual(r.json['libraries'], stub_get_libraries['libraries'])
 
-    @mock.patch('classic.views.request')
-    def test_get_libraries_when_the_user_does_not_exist(self, mocked_request):
+    def test_get_libraries_when_the_user_does_not_exist(self):
         """
         Test that when a user does not exist within the database, that the libraries end point returns a known error
         message
         """
-        headers = {USER_ID_KEYWORD: 10}
-        mocked_request.headers = headers
-
         url = url_for('classiclibraries')
-        r = self.client.get(url)
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
 
         self.assertStatus(r, NO_CLASSIC_ACCOUNT['code'])
         self.assertEqual(r.json['error'], NO_CLASSIC_ACCOUNT['message'])
 
-    @mock.patch('classic.views.request')
     @mock.patch('classic.views.requests.get')
-    def test_get_libraries_when_ads_classic_timesout(self, mocked_get, mocked_request):
+    def test_get_libraries_when_ads_classic_timesout(self, mocked_get):
         """
         Test that if ADS Classic times out before finishing the request, that the libraries end point returns a known
         error
         """
-        headers = {USER_ID_KEYWORD: 10}
-        mocked_request.headers = headers
-
-        user = Users(absolute_uid=10, classic_cookie='ef9df8ds', classic_mirror='mirror.com')
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user@ads.com'
+        )
         db.session.add(user)
         db.session.commit()
 
@@ -329,23 +357,27 @@ class TestClassicLibrariesEndpoint(TestCase):
 
         url = url_for('classiclibraries')
 
-        r = self.client.get(url)
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
 
         self.assertStatus(r, CLASSIC_TIMEOUT['code'])
         self.assertEqual(r.json['error'], CLASSIC_TIMEOUT['message'])
 
-    @mock.patch('classic.views.request')
-    def test_get_libraries_when_ads_classic_returns_non_200(self, mocked_request):
-        headers = {USER_ID_KEYWORD: 10}
-        mocked_request.headers = headers
-
-        user = Users(absolute_uid=10, classic_cookie='ef9df8ds', classic_mirror='mirror.com')
+    def test_get_libraries_when_ads_classic_returns_non_200(self):
+        """
+        Tests that the expected response is returned when ADS classic returns a non-200 response
+        """
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user@ads.com'
+        )
         db.session.add(user)
         db.session.commit()
 
         url = url_for('classiclibraries')
         with HTTMock(ads_classic_fail):
-            r = self.client.get(url)
+            r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
 
         self.assertStatus(r, CLASSIC_UNKNOWN_ERROR['code'])
         self.assertEqual(r.json['error'], CLASSIC_UNKNOWN_ERROR['message'])

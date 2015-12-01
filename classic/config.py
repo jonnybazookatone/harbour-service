@@ -5,7 +5,6 @@ ADS_CLASSIC_MIRROR_LIST = ['adstrio.cfa.harvard.edu', 'adsnun.cfa.harvard.edu', 
                            'ukads.nottingham.ac.uk', 'ads.iucaa.ernet.in', 'ads.inasan.ru', 'ads.bao.ac.cn',
                            'ads.mao.kiev.ua', 'ads.ari.uni-heidelberg.de', 'ads.arsip.lipi.go.id', 'ads.on.br',
                            'saaoads.chpc.ac.za', 'adsabs.harvard.edu']
-CLASSIC_MYADS_USER_DATA_URL = 'http://api.adsabs.harvard.edu/v1/vault/user-data'
 SQLALCHEMY_BINDS = {'imports': ''}
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
