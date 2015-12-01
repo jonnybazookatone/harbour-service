@@ -9,7 +9,7 @@ from flask import url_for
 from classic import app
 from classic.models import db, Users
 from classic.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR,\
-    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, MYADS_TIMEOUT, MYADS_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
+    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
 from stub_response import ads_classic_200, ads_classic_unknown_user, ads_classic_wrong_password, ads_classic_no_cookie,\
     ads_classic_fail, ads_classic_libraries_200
 from httmock import HTTMock
@@ -75,6 +75,46 @@ class TestBaseDatabase(TestCase):
         """
         db.session.remove()
         db.drop_all()
+
+
+class TestClassicUser(TestBaseDatabase):
+    """
+    Tests HTTP end point to obtain the ADS classic user that the user has currently stored in the service
+    """
+
+    def test_user_successfully_retrieves_ads_classic_settings(self):
+        """
+        Tests that the user successfully retrieves their settings for the ADS Classic service
+        """
+        # Stub data
+        user = Users(
+            absolute_uid=10,
+            classic_email='user@ads.com',
+            classic_cookie='some cookie',
+            classic_mirror='mirror.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Ask the end point
+        url = url_for('classicuser')
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+
+        # Check we get what we expected
+        self.assertStatus(r, 200)
+        self.assertEqual(r.json['classic_email'], user.classic_email)
+        self.assertEqual(r.json['classic_mirror'], user.classic_mirror)
+
+    def test_get_a_400_when_the_user_does_not_exist(self):
+        """
+        Test that there is a 400 returned when the user has not saved any ADS Classic account to the service
+        """
+        # Ask the end point
+        url = url_for('classicuser')
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+
+        self.assertStatus(r, NO_CLASSIC_ACCOUNT['code'])
+        self.assertEqual(r.json['error'], NO_CLASSIC_ACCOUNT['message'])
 
 
 class TestAuthenticateUser(TestBaseDatabase):
