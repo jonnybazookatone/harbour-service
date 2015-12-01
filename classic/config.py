@@ -1,10 +1,13 @@
 ADS_CLASSIC_URL = 'http://{mirror}/email={email}&password={password}'
+ADS_CLASSIC_LIBRARIES_URL = 'http://{mirror}/cookie={cookie}'
 ADS_CLASSIC_MIRROR_LIST = ['adstrio.cfa.harvard.edu', 'adsnun.cfa.harvard.edu', 'adsate.cfa.harvard.edu',
                            'astrobib.u-strasbg.fr', 'ads.nao.ac.jp', 'ads.astro.puc.cl', 'esoads.eso.org',
                            'ukads.nottingham.ac.uk', 'ads.iucaa.ernet.in', 'ads.inasan.ru', 'ads.bao.ac.cn',
                            'ads.mao.kiev.ua', 'ads.ari.uni-heidelberg.de', 'ads.arsip.lipi.go.id', 'ads.on.br',
                            'saaoads.chpc.ac.za', 'adsabs.harvard.edu']
 CLASSIC_MYADS_USER_DATA_URL = 'http://api.adsabs.harvard.edu/v1/vault/user-data'
+SQLALCHEMY_BINDS = {'imports': ''}
+SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 CLASSIC_LOGGING = {
     'version': 1,

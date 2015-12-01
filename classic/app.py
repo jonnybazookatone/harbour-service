@@ -8,7 +8,8 @@ from flask import Flask
 from flask.ext.restful import Api
 from flask.ext.discoverer import Discoverer
 from flask.ext.consulate import Consul, ConsulConnectionError
-from views import AuthenticateUser
+from views import AuthenticateUser, ClassicLibraries
+from models import db
 
 
 def create_app():
@@ -30,11 +31,11 @@ def create_app():
     # Register extensions
     api = Api(app)
     Discoverer(app)
+    db.init_app(app)
 
     # Add the end resource end points
-    api.add_resource(AuthenticateUser,
-                     '/auth',
-                     methods=['POST'])
+    api.add_resource(AuthenticateUser, '/auth', methods=['POST'])
+    api.add_resource(ClassicLibraries, '/libraries', methods=['GET'])
 
     return app
 

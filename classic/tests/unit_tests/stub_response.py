@@ -4,7 +4,7 @@ Mock responses to be used with HTTMock
 
 from httmock import urlmatch
 from stub_data import stub_classic_success, stub_classic_unknown_user, stub_classic_wrong_password, \
-    stub_classic_no_cookie
+    stub_classic_no_cookie, stub_classic_libraries_success
 
 
 @urlmatch(netloc=r'(.*\.)?mirror\.com')
@@ -12,6 +12,14 @@ def ads_classic_200(url, request):
     return {
         'status_code': 200,
         'content': stub_classic_success
+    }
+
+
+@urlmatch(netloc=r'(.*\.)?mirror\.com')
+def ads_classic_libraries_200(url, request):
+    return {
+        'status_code': 200,
+        'content': stub_classic_libraries_success
     }
 
 
