@@ -6,12 +6,14 @@ import testing.postgresql
 
 from flask.ext.testing import TestCase
 from flask import url_for
-from classic import app
-from classic.models import db, Users
-from classic.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR,\
-    CLASSIC_NO_COOKIE, CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
-from stub_response import ads_classic_200, ads_classic_unknown_user, ads_classic_wrong_password, ads_classic_no_cookie,\
-    ads_classic_fail, ads_classic_libraries_200
+from harbour import app
+from harbour.models import db, Users
+from harbour.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
+    CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, CLASSIC_NO_COOKIE, \
+    CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
+from stub_response import ads_classic_200, ads_classic_unknown_user, \
+    ads_classic_wrong_password, ads_classic_no_cookie, ads_classic_fail, \
+    ads_classic_libraries_200
 from httmock import HTTMock
 from requests.exceptions import Timeout
 
@@ -44,8 +46,11 @@ class TestBaseDatabase(TestCase):
         app_ = app.create_app()
         app_.config['CLASSIC_LOGGING'] = {}
         app_.config['SQLALCHEMY_BINDS'] = {}
-        app_.config['ADS_CLASSIC_MIRROR_LIST'] = ['mirror.com', 'other.mirror.com']
-        app_.config['SQLALCHEMY_BINDS']['imports'] = TestBaseDatabase.postgresql_url
+        app_.config['ADS_CLASSIC_MIRROR_LIST'] = [
+            'mirror.com', 'other.mirror.com'
+        ]
+        app_.config['SQLALCHEMY_BINDS']['imports'] = \
+            TestBaseDatabase.postgresql_url
 
         return app_
 
@@ -271,7 +276,7 @@ class TestAuthenticateUser(TestBaseDatabase):
         self.assertStatus(r, CLASSIC_AUTH_FAILED['code'])
         self.assertEqual(r.json['error'], CLASSIC_AUTH_FAILED['message'])
 
-    @mock.patch('classic.views.requests.post')
+    @mock.patch('harbour.views.requests.post')
     def test_ads_classic_timeout(self, mocked_post):
         """
         Test that the service catches timeouts and returns a HTTP error response
@@ -422,7 +427,7 @@ class TestClassicLibraries(TestBaseDatabase):
         self.assertStatus(r, NO_CLASSIC_ACCOUNT['code'])
         self.assertEqual(r.json['error'], NO_CLASSIC_ACCOUNT['message'])
 
-    @mock.patch('classic.views.requests.get')
+    @mock.patch('harbour.views.requests.get')
     def test_get_libraries_when_ads_classic_timesout(self, mocked_get):
         """
         Test that if ADS Classic times out before finishing the request, that

@@ -7,7 +7,7 @@
 """
 
 from werkzeug.serving import run_simple
-from classic import app
+from harbour import app
 
 application = app.create_app()
 
