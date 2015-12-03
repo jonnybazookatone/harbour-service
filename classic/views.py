@@ -87,13 +87,16 @@ class ClassicLibraries(BaseView):
     """
 
     decorators = [advertise('scopes', 'rate_limit')]
-    scopes = ['user']
+    scopes = ['adsws:internal']
     rate_limit = [1000, 60*60*24]
 
-    def get(self):
+    def get(self, uid):
         """
         HTTP GET request that contacts the ADS Classic libraries end point to obtain all the libraries relevant to that
         user.
+
+        :param uid: user ID for the API
+        :type uid: int
 
         Return data (on success)
         ------------------------
@@ -112,10 +115,8 @@ class ClassicLibraries(BaseView):
         Any other responses will be default Flask errors
         """
 
-        user_uid = self.helper_get_user_id()
-
         try:
-            user = Users.query.filter(Users.absolute_uid == user_uid).one()
+            user = Users.query.filter(Users.absolute_uid == uid).one()
         except NoResultFound:
             current_app.logger.warning('User does not have an associated ADS Classic account')
             return err(NO_CLASSIC_ACCOUNT)

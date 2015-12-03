@@ -79,12 +79,14 @@ class TestBaseDatabase(TestCase):
 
 class TestClassicUser(TestBaseDatabase):
     """
-    Tests HTTP end point to obtain the ADS classic user that the user has currently stored in the service
+    Tests HTTP end point to obtain the ADS classic user that the user has
+    currently stored in the service
     """
 
     def test_user_successfully_retrieves_ads_classic_settings(self):
         """
-        Tests that the user successfully retrieves their settings for the ADS Classic service
+        Tests that the user successfully retrieves their settings for the ADS
+        Classic service
         """
         # Stub data
         user = Users(
@@ -107,7 +109,8 @@ class TestClassicUser(TestBaseDatabase):
 
     def test_get_a_400_when_the_user_does_not_exist(self):
         """
-        Test that there is a 400 returned when the user has not saved any ADS Classic account to the service
+        Test that there is a 400 returned when the user has not saved any ADS
+        Classic account to the service
         """
         # Ask the end point
         url = url_for('classicuser')
@@ -124,7 +127,8 @@ class TestAuthenticateUser(TestBaseDatabase):
 
     def test_user_authentication_success(self):
         """
-        Tests the end point of a user authenticating their ADS credentials via the web app
+        Tests the end point of a user authenticating their ADS credentials via
+        the web app
         """
 
         # 1. The user fills in their credentials
@@ -132,7 +136,11 @@ class TestAuthenticateUser(TestBaseDatabase):
         url = url_for('AuthenticateUser'.lower())
 
         with HTTMock(ads_classic_200):
-            r = self.client.post(url, data=self.stub_user_data, headers={USER_ID_KEYWORD: 10})
+            r = self.client.post(
+                url,
+                data=self.stub_user_data,
+                headers={USER_ID_KEYWORD: 10}
+            )
 
         self.assertStatus(r, 200)
 
@@ -143,14 +151,20 @@ class TestAuthenticateUser(TestBaseDatabase):
         self.assertTrue(r.json['classic_authed'])
 
         user = Users.query.filter(Users.absolute_uid == 10).one()
-        self.assertEqual(user.classic_email, self.stub_user_data['classic_email'])
-        self.assertEqual(user.classic_mirror, self.stub_user_data['classic_mirror'])
+        self.assertEqual(
+            user.classic_email,
+            self.stub_user_data['classic_email']
+        )
+        self.assertEqual(
+            user.classic_mirror,
+            self.stub_user_data['classic_mirror']
+        )
         self.assertIsInstance(user.classic_cookie, unicode)
 
     def test_user_authentication_success_if_user_already_exists(self):
         """
-        Tests the end point of a user authenticating their ADS credentials via the web app, assuming that they have
-        previously set something before
+        Tests the end point of a user authenticating their ADS credentials via
+        the web app, assuming that they have previously set something before
         """
         # Stub out the user in the database
         user = Users(
@@ -167,7 +181,11 @@ class TestAuthenticateUser(TestBaseDatabase):
         url = url_for('AuthenticateUser'.lower())
 
         with HTTMock(ads_classic_200):
-            r = self.client.post(url, data=self.stub_user_data, headers={USER_ID_KEYWORD: 10})
+            r = self.client.post(
+                url,
+                data=self.stub_user_data,
+                headers={USER_ID_KEYWORD: 10}
+            )
 
         self.assertStatus(r, 200)
 
@@ -179,15 +197,22 @@ class TestAuthenticateUser(TestBaseDatabase):
 
         r_user = Users.query.filter(Users.absolute_uid == 10).one()
 
-        self.assertEqual(r_user.classic_email, self.stub_user_data['classic_email'])
-        self.assertEqual(r_user.classic_mirror, self.stub_user_data['classic_mirror'])
+        self.assertEqual(
+            r_user.classic_email,
+            self.stub_user_data['classic_email']
+        )
+        self.assertEqual(
+            r_user.classic_mirror,
+            self.stub_user_data['classic_mirror']
+        )
         self.assertIsInstance(r_user.classic_cookie, unicode)
 
     def test_user_authentication_fails_when_user_already_exists(self):
         """
-        Tests the end point of a user authenticating their ADS credentials via the web app, assuming that they have
-        previously set something before. This is the scenario in which there is a failure, the credentials remain the
-        same in the database
+        Tests the end point of a user authenticating their ADS credentials via
+        the web app, assuming that they have previously set something before.
+        This is the scenario in which there is a failure, the credentials remain
+        the same in the database
         """
         # Stub out the user in the database
         user = Users(
@@ -203,16 +228,27 @@ class TestAuthenticateUser(TestBaseDatabase):
         # 2. The user submits their credentials to the end point
         url = url_for('AuthenticateUser'.lower())
 
-        for fail_response in [ads_classic_fail, ads_classic_no_cookie, ads_classic_unknown_user, ads_classic_wrong_password]:
+        possible_failures = [
+            ads_classic_fail,
+            ads_classic_no_cookie,
+            ads_classic_unknown_user,
+            ads_classic_wrong_password
+        ]
+        for fail_response in possible_failures:
             with HTTMock(fail_response):
-                self.client.post(url, data=self.stub_user_data, headers={USER_ID_KEYWORD: 10})
+                self.client.post(
+                    url,
+                    data=self.stub_user_data,
+                    headers={USER_ID_KEYWORD: 10}
+                )
 
             r_user = Users.query.filter(Users.absolute_uid == 10).one()
             self.assertEqual(r_user, user)
 
     def test_user_authentication_unknown_user(self):
         """
-        Tests the end point of a user authenticating their ADS credentials via the web app
+        Tests the end point of a user authenticating their ADS credentials via
+        the web app
         """
         url = url_for('AuthenticateUser'.lower())
 
@@ -224,7 +260,8 @@ class TestAuthenticateUser(TestBaseDatabase):
 
     def test_user_authentication_wrong_password(self):
         """
-        Tests the end point of a user authenticating their ADS credentials via the web app
+        Tests the end point of a user authenticating their ADS credentials via
+        the web app
         """
         url = url_for('AuthenticateUser'.lower())
 
@@ -269,7 +306,8 @@ class TestAuthenticateUser(TestBaseDatabase):
 
     def test_mismatching_emails_on_auth(self):
         """
-        Just a sanity check that if the e-mail sent, and the e-mail returned after authentification, match one another
+        Just a sanity check that if the e-mail sent, and the e-mail returned
+        after authentification, match one another
         """
         # 1. The user fills in their credentials
         user_data = self.stub_user_data.copy()
@@ -301,7 +339,8 @@ class TestAuthenticateUser(TestBaseDatabase):
 
     def test_classic_does_not_return_cookie(self):
         """
-        In the (unlikely) scenario that ADS Classic does not return a cookie for the user, we need to handle that
+        In the (unlikely) scenario that ADS Classic does not return a cookie for
+        the user, we need to handle that
         """
         url = url_for('authenticateuser')
         with HTTMock(ads_classic_no_cookie):
@@ -311,8 +350,9 @@ class TestAuthenticateUser(TestBaseDatabase):
 
     def test_ads_classic_any_non_unknown_response(self):
         """
-        Test that the error message for an unknown error from myADS is returned. When we know the exact errors, this
-        message can be updated to be more specific
+        Test that the error message for an unknown error from myADS is returned.
+        When we know the exact errors, this message can be updated to be more
+        specific
         """
         url = url_for('authenticateuser')
 
@@ -329,7 +369,8 @@ class TestAuthenticateUser(TestBaseDatabase):
 
 class TestClassicLibraries(TestBaseDatabase):
     """
-    Tests the libraries end point that returns the libraries from ADS classic that belong to a user
+    Tests the libraries end point that returns the libraries from ADS classic
+    that belong to a user
     """
     def test_get_libraries_end_point(self):
         """
@@ -341,7 +382,8 @@ class TestClassicLibraries(TestBaseDatabase):
                     'name': 'Name',
                     'description': 'Description',
                     'documents': [
-                        '2015MNRAS.446.4239E', '2015A&C....10...61E', '2014A&A...562A.100E', '2013A&A...556A..23E'
+                        '2015MNRAS.446.4239E', '2015A&C....10...61E',
+                        '2014A&A...562A.100E', '2013A&A...556A..23E'
                     ]
                 }
             ]
@@ -359,21 +401,23 @@ class TestClassicLibraries(TestBaseDatabase):
         db.session.add(user)
         db.session.commit()
 
-        # 2. The database is checked to see if the user exists, and the cookie retrieved
-        # 3. The ADS Classic end point is contacted, returning a 200, and the content returned
-        url = url_for('classiclibraries')
+        # 2. The database is checked to see if the user exists, and the cookie
+        # retrieved
+        #  3. The ADS Classic end point is contacted, returning a 200, and the
+        # content returned
+        url = url_for('classiclibraries', uid=10)
         with HTTMock(ads_classic_libraries_200):
-            r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+            r = self.client.get(url)
         self.assertStatus(r, 200)
         self.assertEqual(r.json['libraries'], stub_get_libraries['libraries'])
 
     def test_get_libraries_when_the_user_does_not_exist(self):
         """
-        Test that when a user does not exist within the database, that the libraries end point returns a known error
-        message
+        Test that when a user does not exist within the database, that the
+        libraries end point returns a known error message
         """
-        url = url_for('classiclibraries')
-        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+        url = url_for('classiclibraries', uid=10)
+        r = self.client.get(url)
 
         self.assertStatus(r, NO_CLASSIC_ACCOUNT['code'])
         self.assertEqual(r.json['error'], NO_CLASSIC_ACCOUNT['message'])
@@ -381,8 +425,8 @@ class TestClassicLibraries(TestBaseDatabase):
     @mock.patch('classic.views.requests.get')
     def test_get_libraries_when_ads_classic_timesout(self, mocked_get):
         """
-        Test that if ADS Classic times out before finishing the request, that the libraries end point returns a known
-        error
+        Test that if ADS Classic times out before finishing the request, that
+        the libraries end point returns a known error
         """
         user = Users(
             absolute_uid=10,
@@ -395,16 +439,17 @@ class TestClassicLibraries(TestBaseDatabase):
 
         mocked_get.side_effect = Timeout
 
-        url = url_for('classiclibraries')
+        url = url_for('classiclibraries', uid=10)
 
-        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+        r = self.client.get(url)
 
         self.assertStatus(r, CLASSIC_TIMEOUT['code'])
         self.assertEqual(r.json['error'], CLASSIC_TIMEOUT['message'])
 
     def test_get_libraries_when_ads_classic_returns_non_200(self):
         """
-        Tests that the expected response is returned when ADS classic returns a non-200 response
+        Tests that the expected response is returned when ADS classic returns a
+        non-200 response
         """
         user = Users(
             absolute_uid=10,
@@ -415,7 +460,7 @@ class TestClassicLibraries(TestBaseDatabase):
         db.session.add(user)
         db.session.commit()
 
-        url = url_for('classiclibraries')
+        url = url_for('classiclibraries', uid=10)
         with HTTMock(ads_classic_fail):
             r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
 
