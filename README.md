@@ -3,9 +3,9 @@
 [![Code Climate](https://codeclimate.com/github/jonnybazookatone/classic-service/badges/gpa.svg)](https://codeclimate.com/github/jonnybazookatone/classic-service)
 [![Issue Count](https://codeclimate.com/github/jonnybazookatone/classic-service/badges/issue_count.svg)](https://codeclimate.com/github/jonnybazookatone/classic-service)
 
-# Classic-service
+# harbour-service
 
-Gateway service for all your ADS classic needs
+Gateway service for all your ADS communication with legacy systems, such as Classic and BEER/2.0
 
 # Development
 
