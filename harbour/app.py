@@ -35,7 +35,7 @@ def create_app():
 
     # Add the end resource end points
     api.add_resource(AuthenticateUser, '/auth', methods=['POST'])
-    api.add_resource(ClassicLibraries, '/libraries', methods=['GET'])
+    api.add_resource(ClassicLibraries, '/libraries/<int:uid>', methods=['GET'])
     api.add_resource(ClassicUser, '/user', methods=['GET'])
 
     return app
