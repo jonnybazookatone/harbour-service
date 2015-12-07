@@ -6,9 +6,8 @@ ADS_CLASSIC_MIRROR_LIST = ['adstrio.cfa.harvard.edu', 'adsnun.cfa.harvard.edu', 
                            'ads.mao.kiev.ua', 'ads.ari.uni-heidelberg.de', 'ads.arsip.lipi.go.id', 'ads.on.br',
                            'saaoads.chpc.ac.za', 'adsabs.harvard.edu']
 SQLALCHEMY_BINDS = {'imports': ''}
-SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-CLASSIC_LOGGING = {
+HARBOUR_LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
