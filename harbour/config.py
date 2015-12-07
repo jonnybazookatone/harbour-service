@@ -5,7 +5,7 @@ ADS_CLASSIC_MIRROR_LIST = ['adstrio.cfa.harvard.edu', 'adsnun.cfa.harvard.edu', 
                            'ukads.nottingham.ac.uk', 'ads.iucaa.ernet.in', 'ads.inasan.ru', 'ads.bao.ac.cn',
                            'ads.mao.kiev.ua', 'ads.ari.uni-heidelberg.de', 'ads.arsip.lipi.go.id', 'ads.on.br',
                            'saaoads.chpc.ac.za', 'adsabs.harvard.edu']
-SQLALCHEMY_BINDS = {'imports': ''}
+SQLALCHEMY_BINDS = {'harbour': ''}
 
 HARBOUR_LOGGING = {
     'version': 1,
@@ -32,3 +32,4 @@ HARBOUR_LOGGING = {
         },
     },
 }
+
