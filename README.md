@@ -11,7 +11,7 @@ Gateway service for all your ADS communication with legacy systems, such as Clas
 
 You can run unit tests in the following way:
 ```bash
-nosetests classic/tests/
+nosetests harbour/tests/
 ```
 
 A Vagrantfile and puppet manifest are available for development within a virtual machine. To use the vagrant VM defined here you will need to install *Vagrant* and *VirtualBox*. 
