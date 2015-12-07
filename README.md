@@ -1,7 +1,7 @@
-[![Build Status](https://travis-ci.org/jonnybazookatone/classic-service.svg?branch=master)](https://travis-ci.org/jonnybazookatone/classic-service)
-[![Coverage Status](https://coveralls.io/repos/jonnybazookatone/classic-service/badge.svg?branch=master&service=github)](https://coveralls.io/github/jonnybazookatone/classic-service?branch=master)
-[![Code Climate](https://codeclimate.com/github/jonnybazookatone/classic-service/badges/gpa.svg)](https://codeclimate.com/github/jonnybazookatone/classic-service)
-[![Issue Count](https://codeclimate.com/github/jonnybazookatone/classic-service/badges/issue_count.svg)](https://codeclimate.com/github/jonnybazookatone/classic-service)
+[![Build Status](https://travis-ci.org/adsabs/harbour-service.svg?branch=master)](https://travis-ci.org/adsabs/harbour-service)
+[![Coverage Status](https://coveralls.io/repos/adsabs/harbour-service/badge.svg?branch=master&service=github)](https://coveralls.io/github/adsabs/harbour-service?branch=master)
+[![Code Climate](https://codeclimate.com/github/adsabs/harbour-service/badges/gpa.svg)](https://codeclimate.com/github/adsabs/harbour-service)
+[![Issue Count](https://codeclimate.com/github/adsabs/harbour-service/badges/issue_count.svg)](https://codeclimate.com/github/adsabs/harbour-service)
 
 # harbour-service
 
