@@ -25,7 +25,7 @@ def create_app():
     Consul(app)  # load_config expects consul to be registered
     load_config(app)
     logging.config.dictConfig(
-        app.config['CLASSIC_LOGGING']
+        app.config['HARBOUR_LOGGING']
     )
 
     # Register extensions
