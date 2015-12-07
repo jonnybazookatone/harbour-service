@@ -15,7 +15,7 @@ class Users(db.Model):
     Foreign-key absolute_uid is the primary key of the user in the user
     database microservice.
     """
-    __bind_key__ = 'imports'
+    __bind_key__ = 'harbour'
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     absolute_uid = db.Column(db.Integer, unique=True, nullable=False)
@@ -24,5 +24,15 @@ class Users(db.Model):
     classic_cookie = db.Column(db.String, nullable=False)
 
     def __repr__(self):
-        return '<User: id {0}, absolute_uid {1}, classic_cookie "{2}", classic_email "{3}", classic_mirror "{4}">'\
-            .format(self.id, self.absolute_uid, self.classic_cookie, self.classic_email, self.classic_mirror)
+        return '<' \
+               'User: id {0}, ' \
+               'absolute_uid {1}, ' \
+               'classic_cookie "{2}", ' \
+               'classic_email "{3}", ' \
+               'classic_mirror "{4}"' \
+               '>'\
+            .format(self.id,
+                    self.absolute_uid,
+                    self.classic_cookie,
+                    self.classic_email,
+                    self.classic_mirror)
