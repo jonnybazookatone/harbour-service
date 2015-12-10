@@ -17,6 +17,13 @@ Gateway service for all your ADS communication with legacy systems, such as Clas
   200, {"classic_email": "email", "classic_mirror": "mirror", "classic_authed": true}
   ```
 
+1. If the user does not know the mirror, they can access a list of available mirrors for the service
+  ```bash
+  user> curl -X GET 'http://api/v1/harbour/mirrors' -H 'Authorization: Bearer <TOKEN>'
+  
+  200, ['site1', 'site2', ...., 'siteN']
+  ```
+
 1. User wants to check the credentials they have stored
   ```bash
   user> curl -X GET 'http://api/v1/harbour/user' -H 'Authorization: Bearer <TOKEN>'
