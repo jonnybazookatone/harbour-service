@@ -5,6 +5,7 @@ import mock
 
 from base import TestBaseDatabase
 from flask import url_for
+from harbour.config import ADS_CLASSIC_MIRROR_LIST
 from harbour.models import db, Users
 from harbour.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
     CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, CLASSIC_NO_COOKIE, \
@@ -60,6 +61,25 @@ class TestClassicUser(TestBaseDatabase):
 
         self.assertStatus(r, NO_CLASSIC_ACCOUNT['code'])
         self.assertEqual(r.json['error'], NO_CLASSIC_ACCOUNT['message'])
+
+
+class TestAllowedMirrors(TestBaseDatabase):
+    """
+    Tests HTTP end point to obtain the ADS classic user that the user has
+    currently stored in the service
+    """
+
+    def test_user_successfully_retrieves_a_list_of_classic_mirrors(self):
+        """
+        Tests that a user can successfully retrieve a list of available ADS
+        Classic mirrors, that are valid for this service.
+        """
+        url = url_for('allowedmirrors')
+        r = self.client.get(url)
+
+        # Check we get what we expected
+        self.assertStatus(r, 200)
+        self.assertListEqual(r.json, self.app.config['ADS_CLASSIC_MIRROR_LIST'])
 
 
 class TestAuthenticateUser(TestBaseDatabase):

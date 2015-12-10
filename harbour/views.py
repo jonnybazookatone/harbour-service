@@ -82,6 +82,38 @@ class ClassicUser(BaseView):
             return err(NO_CLASSIC_ACCOUNT)
 
 
+class AllowedMirrors(BaseView):
+    """
+    End point that returns the allowed list of mirror sites for either ADS
+    classic utilities or BEER/ADS2.0 utilities.
+    """
+
+    decorators = [advertise('scopes', 'rate_limit')]
+    scopes = []
+    rate_limit = [1000, 60*60*24]
+
+    def get(self):
+        """
+        HTTP GET request that returns the list of mirror sites that can be used
+        with this end point. Any end points not listed by this method cannot be
+        used for any of the other methods related to this service.
+
+        Return data (on success)
+        ------------------------
+        list[<string>]
+        eg., list of mirrors, ['site1', 'site2', ...., 'siteN']
+
+
+        HTTP Responses:
+        --------------
+        Succeed authentication: 200
+
+        Any other responses will be default Flask errors
+        """
+
+        return current_app.config.get('ADS_CLASSIC_MIRROR_LIST', [])
+
+
 class ClassicLibraries(BaseView):
     """
     End point to collect the user's ADS classic libraries with the external ADS
