@@ -7,6 +7,35 @@
 
 Gateway service for all your ADS communication with legacy systems, such as Classic and BEER/2.0
 
+# ADS Classic Workflow
+
+1. User enters their 'email', 'password', and 'mirror' for their ADS credentials
+  ```bash
+  user> curl -X POST 'http://api/v1/harbour/auth' -H 'Authorization: Bearer <TOKEN>' 
+  --data '{"classic_email": "email", "classic_password": "password", "classic_mirror": "mirror"}'
+  
+  200, {"classic_email": "email", "classic_mirror": "mirror", "classic_authed": true}
+  ```
+
+1. User wants to check the credentials they have stored
+  ```bash
+  user> curl -X GET 'http://api/v1/harbour/user' -H 'Authorization: Bearer <TOKEN>'
+  
+  200, {"classic_email": "email", "classic_mirror": "mirror"}
+  ```
+
+1. User imports the libraries from ADS Classic
+  ```bash
+  user> curl -X GET 'http://api/v1/biblib/classic' -H 'Authorization: Bearer <TOKEN>'
+  
+  200, [{"action": "created", "library_id": "fdsfsfsdfdsfds", "name": "Name", "num_added": 4, "description": "Description"}, {"action": "created", "library_id": "dsadsadsadsa", "name": "Name2", "n
+um_added": 4, "description": "Description2"}]
+  ```
+
+*Notes*
+The mirror they can use must be in the list defined in `config.py`.
+
+
 # Development
 
 You can run unit tests in the following way:
