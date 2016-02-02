@@ -5,6 +5,7 @@ Application factory
 import logging.config
 
 from flask import Flask
+from flask.ext.watchman import Watchman
 from flask.ext.restful import Api
 from flask.ext.discoverer import Discoverer
 from flask.ext.consulate import Consul, ConsulConnectionError
@@ -30,6 +31,7 @@ def create_app():
     )
 
     # Register extensions
+    watchman = Watchman(app, version=dict(scopes=['']))
     api = Api(app)
     Discoverer(app)
     db.init_app(app)
