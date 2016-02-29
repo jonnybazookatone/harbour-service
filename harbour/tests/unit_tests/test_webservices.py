@@ -1,15 +1,21 @@
 """
 Test webservices
 """
-import mock
 
+import mock
+import json
+import boto3
+import unittest
+
+from moto import mock_s3
 from base import TestBaseDatabase
 from flask import url_for
-from harbour.config import ADS_CLASSIC_MIRROR_LIST
+from harbour.app import create_app
 from harbour.models import db, Users
 from harbour.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
     CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, CLASSIC_NO_COOKIE, \
-    CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
+    CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT, NO_TWOPOINTOH_LIBRARIES, \
+    NO_TWOPOINTOH_ACCOUNT, TWOPOINTOH_AWS_PROBLEM
 from stub_response import ads_classic_200, ads_classic_unknown_user, \
     ads_classic_wrong_password, ads_classic_no_cookie, ads_classic_fail, \
     ads_classic_libraries_200
@@ -327,6 +333,176 @@ class TestAuthenticateUser(TestBaseDatabase):
         self.assertIn('ads_classic', r.json)
         self.assertIn('message', r.json['ads_classic'])
         self.assertIn('status_code', r.json['ads_classic'])
+
+
+class TestADSTwoPointOhLibraries(TestBaseDatabase):
+    """
+    Tests the libraries end point that returns the libraries from ADS 2.0
+    that belong to a user
+    """
+
+    @mock_s3
+    def create_app(self):
+        """
+        Create the wsgi application
+        """
+        # Setup S3 mock data
+        TestADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        # Setup the app
+        app_ = create_app()
+        app_.config['CLASSIC_LOGGING'] = {}
+        app_.config['SQLALCHEMY_BINDS'] = {}
+        app_.config['ADS_CLASSIC_MIRROR_LIST'] = [
+            'mirror.com', 'other.mirror.com'
+        ]
+        app_.config['SQLALCHEMY_BINDS']['harbour'] = \
+            TestBaseDatabase.postgresql_url
+
+        return app_
+
+    @staticmethod
+    def helper_s3_mock_setup():
+        """
+        Setup the S3 buckets required for tests
+        """
+        # Stub data needed for create app
+        stub_mongogut_users = {
+            'user@ads.com': 'cb16a523-cdba-406b-bfff-edfd428248be.json'
+        }
+        stub_mongogut_library = [
+                {
+                    'name': 'Name',
+                    'description': 'Description',
+                    'documents': [
+                        '2015MNRAS.446.4239E', '2015A&C....10...61E',
+                        '2014A&A...562A.100E', '2013A&A...556A..23E'
+                    ]
+                }
+            ]
+
+        s3_resource = boto3.resource('s3')
+        s3_resource.create_bucket(Bucket='adsabs-mongogut')
+        bucket = s3_resource.Bucket('adsabs-mongogut')
+
+        # First is libraries
+        bucket.put_object(
+            Key='users.json',
+            Body=json.dumps(stub_mongogut_users)
+        )
+
+        # Second is the libraries
+        bucket.put_object(
+            Key='cb16a523-cdba-406b-bfff-edfd428248be.json',
+            Body=json.dumps(stub_mongogut_library)
+        )
+
+    @mock_s3
+    def test_get_libraries_end_point(self):
+        """
+        Test the workflow of successfully retrieving a set of ADS 2.0 libraries
+        """
+        # Setup S3 mock data
+        TestADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        # Expected stub data
+        stub_get_libraries = {
+            'libraries': [
+                {
+                    'name': 'Name',
+                    'description': 'Description',
+                    'documents': [
+                        '2015MNRAS.446.4239E', '2015A&C....10...61E',
+                        '2014A&A...562A.100E', '2013A&A...556A..23E'
+                    ]
+                }
+            ]
+        }
+
+        # 1. The user is identified via header information
+        # - Generate dummy user in database
+        # - Give the header the correct information
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user@ads.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        url = url_for('twopointohlibraries', uid=10)
+        r = self.client.get(url)
+
+        self.assertStatus(r, 200)
+        self.assertEqual(r.json['libraries'], stub_get_libraries['libraries'])
+
+    def test_get_libraries_end_point_when_no_user(self):
+        """
+        Test when this user does not have any libraries
+        """
+        # 1. The user is identified via header information
+        # - Generate dummy user in database
+        # - Give the header the correct information
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user_no_library@ads.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        url = url_for('twopointohlibraries', uid=10)
+        r = self.client.get(url)
+
+        self.assertStatus(r, NO_TWOPOINTOH_LIBRARIES['code'])
+        self.assertEqual(r.json['error'], NO_TWOPOINTOH_LIBRARIES['message'])
+
+    def test_get_libraries_end_point_when_no_classic_auth(self):
+        """
+        Test when this user has not got an associated ADS 2.0 (classic) account
+        """
+        url = url_for('twopointohlibraries', uid=10)
+        r = self.client.get(url)
+
+        self.assertStatus(r, NO_TWOPOINTOH_ACCOUNT['code'])
+        self.assertEqual(r.json['error'], NO_TWOPOINTOH_ACCOUNT['message'])
+
+    @mock.patch('harbour.app.boto3.resource')
+    def test_get_libraries_end_point_when_aws_s3_error(self, mock_resource):
+        """
+        Test when this user has not associated any ADS 2.0 (classic) account
+        """
+        mock_resource.side_effect = Exception('Custom Error')
+
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user@ads.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        url = url_for('twopointohlibraries', uid=10)
+        r = self.client.get(url)
+
+        self.assertStatus(r, TWOPOINTOH_AWS_PROBLEM['code'])
+        self.assertEqual(r.json['error'], TWOPOINTOH_AWS_PROBLEM['message'])
+
+    def test_get_libraries_end_point_when_users_have_not_loaded(self):
+        """
+        Test when this user has not got an associated ADS 2.0 (classic) account
+        """
+        self.assertTrue(self.app.config['ADS_TWO_POINT_OH_LOADED_USERS'])
+        self.app.config['ADS_TWO_POINT_OH_LOADED_USERS'] = False
+
+        url = url_for('twopointohlibraries', uid=10)
+        r = self.client.get(url)
+
+        self.assertStatus(r, TWOPOINTOH_AWS_PROBLEM['code'])
+        self.assertEqual(r.json['error'], TWOPOINTOH_AWS_PROBLEM['message'])
 
 
 class TestClassicLibraries(TestBaseDatabase):

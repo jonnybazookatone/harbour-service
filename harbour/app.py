@@ -1,7 +1,10 @@
+# encoding: utf-8
 """
 Application factory
 """
 
+import json
+import boto3
 import logging.config
 
 from flask import Flask
@@ -10,8 +13,9 @@ from flask.ext.restful import Api
 from flask.ext.discoverer import Discoverer
 from flask.ext.consulate import Consul, ConsulConnectionError
 from views import AuthenticateUser, AllowedMirrors, \
-    ClassicLibraries, ClassicUser
+    ClassicLibraries, ClassicUser, TwoPointOhLibraries
 from models import db
+from StringIO import StringIO
 
 
 def create_app():
@@ -30,6 +34,8 @@ def create_app():
         app.config['HARBOUR_LOGGING']
     )
 
+    load_s3(app)
+
     # Register extensions
     watchman = Watchman(app, version=dict(scopes=['']))
     api = Api(app)
@@ -38,11 +44,45 @@ def create_app():
 
     # Add the end resource end points
     api.add_resource(AuthenticateUser, '/auth', methods=['POST'])
-    api.add_resource(ClassicLibraries, '/libraries/<int:uid>', methods=['GET'])
+    api.add_resource(
+        ClassicLibraries,
+        '/libraries/classic/<int:uid>',
+        methods=['GET']
+    )
+    api.add_resource(
+        TwoPointOhLibraries,
+        '/libraries/adstwopointoh/<int:uid>',
+        methods=['GET']
+    )
     api.add_resource(ClassicUser, '/user', methods=['GET'])
     api.add_resource(AllowedMirrors, '/mirrors', methods=['GET'])
 
     return app
+
+
+def load_s3(app):
+    """
+    Loads relevant data from S3 that is needed
+
+    :param app: flask.Flask application instance
+    """
+    try:
+        s3_resource = boto3.resource('s3')
+        bucket = s3_resource.Object(
+            app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
+            'users.json'
+        )
+        body = bucket.get()['Body']
+
+        user_data = StringIO()
+        for chunk in iter(lambda: body.read(1024), b''):
+            user_data.write(chunk)
+
+        users = json.loads(user_data.getvalue())
+        app.config['ADS_TWO_POINT_OH_USERS'] = users
+        app.config['ADS_TWO_POINT_OH_LOADED_USERS'] = True
+    except Exception as error:
+        app.logger.warning('Could not load users database: {}'.format(error))
 
 
 def load_config(app):
