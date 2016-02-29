@@ -38,3 +38,18 @@ NO_CLASSIC_ACCOUNT = dict(
     message='This user has not setup an ADS Classic account',
     code=400
 )
+
+NO_TWOPOINTOH_ACCOUNT = dict(
+    message='This user has not setup an ADS 2.0 account',
+    code=400
+)
+
+NO_TWOPOINTOH_LIBRARIES = dict(
+    message='This user has no ADS 2.0 libraries',
+    code=400
+)
+
+TWOPOINTOH_AWS_PROBLEM = dict(
+    message='Unknown AWS problems',
+    code=500
+)

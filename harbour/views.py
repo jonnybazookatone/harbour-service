@@ -1,7 +1,9 @@
+# encoding: utf-8
 """
 Views
 """
-
+import json
+import boto3
 import requests
 import traceback
 
@@ -10,9 +12,11 @@ from flask import current_app, request
 from flask.ext.restful import Resource
 from flask.ext.discoverer import advertise
 from models import db, Users
+from StringIO import StringIO
 from http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
     CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, CLASSIC_NO_COOKIE, \
-    CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT
+    CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT, NO_TWOPOINTOH_ACCOUNT, \
+    NO_TWOPOINTOH_LIBRARIES, TWOPOINTOH_AWS_PROBLEM
 from sqlalchemy.orm.exc import NoResultFound
 
 USER_ID_KEYWORD = 'X-Adsws-Uid'
@@ -112,6 +116,89 @@ class AllowedMirrors(BaseView):
         """
 
         return current_app.config.get('ADS_CLASSIC_MIRROR_LIST', [])
+
+
+class TwoPointOhLibraries(BaseView):
+    """
+    End point to collect the user's ADS 2.0 libraries with the MongoDB dump
+    in a flat-file on S3 storage
+
+    Note: ADS 2.0 user accounts are tied to ADS Classic accounts. Therefore,
+    a user will need to regisiter their ADS Classic/2.0 account on this service
+    for them to also be able to access the ADS 2.0 libraries.
+    """
+    decorators = [advertise('scopes', 'rate_limit')]
+    scopes = ['adsws:internal']
+    rate_limit = [1000, 60*60*24]
+
+    def get(self, uid):
+        """
+        HTTP GET request that finds the libraries within ADS 2.0 for that user.
+
+        :param uid: user ID for the API
+        :type uid: int
+
+        Return data (on success)
+        ------------------------
+        libraries: <list<dict>> a list of dictionaries, that contains the
+        following for each library entry:
+            name: <string> name of the library
+            description: <string> description of the library
+            documents: <list<string>> list of documents
+
+        HTTP Responses:
+        --------------
+        Succeed getting libraries: 200
+        User does not have a classic/ADS 2.0 account: 400
+        User does not have any libraries in their ADS 2.0 account: 400
+        Unknown error: 500
+
+        Any other responses will be default Flask errors
+        """
+        if not current_app.config['ADS_TWO_POINT_OH_LOADED_USERS']:
+            current_app.logger.error(
+                'Users from MongoDB have not been loaded into the app'
+            )
+            return err(TWOPOINTOH_AWS_PROBLEM)
+
+        try:
+            user = Users.query.filter(Users.absolute_uid == uid).one()
+        except NoResultFound:
+            current_app.logger.warning(
+                'User does not have an associated ADS Classic/2.0 account'
+            )
+            return err(NO_TWOPOINTOH_ACCOUNT)
+
+        library_file = current_app.config['ADS_TWO_POINT_OH_USERS'].get(
+            user.classic_email,
+            None
+        )
+
+        if not library_file:
+            current_app.logger.warning(
+                'User does not have any libraries in ADS 2.0'
+            )
+            return err(NO_TWOPOINTOH_LIBRARIES)
+
+        try:
+            s3_resource = boto3.resource('s3')
+            bucket = s3_resource.Object(
+                current_app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
+                library_file
+            )
+            body = bucket.get()['Body']
+            library_data = StringIO()
+            for chunk in iter(lambda: body.read(1024), b''):
+                library_data.write(chunk)
+
+            library = json.loads(library_data.getvalue())
+        except Exception as error:
+            current_app.logger.error(
+                'Unknown error with AWS: {}'.format(error)
+            )
+            return err(TWOPOINTOH_AWS_PROBLEM)
+
+        return {'libraries': library}, 200
 
 
 class ClassicLibraries(BaseView):

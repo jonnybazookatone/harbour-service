@@ -5,6 +5,10 @@ ADS_CLASSIC_MIRROR_LIST = ['adstrio.cfa.harvard.edu', 'adsnun.cfa.harvard.edu', 
                            'ukads.nottingham.ac.uk', 'ads.iucaa.ernet.in', 'ads.inasan.ru', 'ads.bao.ac.cn',
                            'ads.mao.kiev.ua', 'ads.ari.uni-heidelberg.de', 'ads.arsip.lipi.go.id', 'ads.on.br',
                            'saaoads.chpc.ac.za', 'adsabs.harvard.edu']
+ADS_TWO_POINT_OH_S3_MONGO_BUCKET = 'adsabs-mongogut'
+ADS_TWO_POINT_OH_LOADED_USERS = False
+ADS_TWO_POINT_OH_USERS = {}
+
 SQLALCHEMY_BINDS = {'harbour': ''}
 
 HARBOUR_LOGGING = {
