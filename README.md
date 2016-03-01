@@ -7,7 +7,7 @@
 
 Gateway service for all your ADS communication with legacy systems, such as Classic and BEER/2.0
 
-# ADS Classic Workflow
+# ADS Classic/2.0 Import Workflow
 
 1. User enters their 'email', 'password', and 'mirror' for their ADS credentials
   ```bash
@@ -33,7 +33,15 @@ Gateway service for all your ADS communication with legacy systems, such as Clas
 
 1. User imports the libraries from ADS Classic
   ```bash
-  user> curl -X GET 'http://api/v1/biblib/classic' -H 'Authorization: Bearer <TOKEN>'
+  user> curl -X GET 'http://api/v1/biblib/import/classic' -H 'Authorization: Bearer <TOKEN>'
+  
+  200, [{"action": "created", "library_id": "fdsfsfsdfdsfds", "name": "Name", "num_added": 4, "description": "Description"}, {"action": "created", "library_id": "dsadsadsadsa", "name": "Name2", "n
+um_added": 4, "description": "Description2"}]
+  ```
+
+1. User imports the libraries from ADS 2.0
+  ```bash
+  user> curl -X GET 'http://api/v1/biblib/import/twopointoh' -H 'Authorization: Bearer <TOKEN>'
   
   200, [{"action": "created", "library_id": "fdsfsfsdfdsfds", "name": "Name", "num_added": 4, "description": "Description"}, {"action": "created", "library_id": "dsadsadsadsa", "name": "Name2", "n
 um_added": 4, "description": "Description2"}]
