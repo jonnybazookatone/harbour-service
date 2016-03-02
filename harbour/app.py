@@ -51,7 +51,7 @@ def create_app():
     )
     api.add_resource(
         TwoPointOhLibraries,
-        '/libraries/adstwopointoh/<int:uid>',
+        '/libraries/twopointoh/<int:uid>',
         methods=['GET']
     )
     api.add_resource(ClassicUser, '/user', methods=['GET'])
