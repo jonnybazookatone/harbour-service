@@ -2,21 +2,25 @@
 """
 Views
 """
+import re
 import json
 import boto3
 import requests
 import traceback
 
 from utils import get_post_data, err
-from flask import current_app, request
+from flask import current_app, request, send_file
 from flask.ext.restful import Resource
 from flask.ext.discoverer import advertise
+from client import client
 from models import db, Users
+from zipfile import ZipFile
 from StringIO import StringIO
 from http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
     CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, CLASSIC_NO_COOKIE, \
     CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT, NO_TWOPOINTOH_ACCOUNT, \
-    NO_TWOPOINTOH_LIBRARIES, TWOPOINTOH_AWS_PROBLEM
+    NO_TWOPOINTOH_LIBRARIES, TWOPOINTOH_AWS_PROBLEM, EXPORT_SERVICE_FAIL, \
+    TWOPOINTOH_WRONG_EXPORT_TYPE
 from sqlalchemy.orm.exc import NoResultFound
 
 USER_ID_KEYWORD = 'X-Adsws-Uid'
@@ -131,6 +135,31 @@ class TwoPointOhLibraries(BaseView):
     scopes = ['adsws:internal']
     rate_limit = [1000, 60*60*24]
 
+    @staticmethod
+    def get_s3_library(library_file_name):
+        """
+        Get the JSON MongoDB dump of the ADS 2.0 library of a specific user.
+        These files are stored on S3.
+
+        :param library_file_name: name of library file
+        :type library_file_name: str
+
+        :return: dict
+        """
+        s3_resource = boto3.resource('s3')
+        bucket = s3_resource.Object(
+            current_app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
+            library_file_name
+        )
+        body = bucket.get()['Body']
+        library_data = StringIO()
+        for chunk in iter(lambda: body.read(1024), b''):
+            library_data.write(chunk)
+
+        library = json.loads(library_data.getvalue())
+
+        return library
+
     def get(self, uid):
         """
         HTTP GET request that finds the libraries within ADS 2.0 for that user.
@@ -169,29 +198,19 @@ class TwoPointOhLibraries(BaseView):
             )
             return err(NO_TWOPOINTOH_ACCOUNT)
 
-        library_file = current_app.config['ADS_TWO_POINT_OH_USERS'].get(
+        library_file_name = current_app.config['ADS_TWO_POINT_OH_USERS'].get(
             user.classic_email,
             None
         )
 
-        if not library_file:
+        if not library_file_name:
             current_app.logger.warning(
                 'User does not have any libraries in ADS 2.0'
             )
             return err(NO_TWOPOINTOH_LIBRARIES)
 
         try:
-            s3_resource = boto3.resource('s3')
-            bucket = s3_resource.Object(
-                current_app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
-                library_file
-            )
-            body = bucket.get()['Body']
-            library_data = StringIO()
-            for chunk in iter(lambda: body.read(1024), b''):
-                library_data.write(chunk)
-
-            library = json.loads(library_data.getvalue())
+            library = TwoPointOhLibraries.get_s3_library(library_file_name)
         except Exception as error:
             current_app.logger.error(
                 'Unknown error with AWS: {}'.format(error)
@@ -199,6 +218,171 @@ class TwoPointOhLibraries(BaseView):
             return err(TWOPOINTOH_AWS_PROBLEM)
 
         return {'libraries': library}, 200
+
+
+class ExportTwoPointOhLibraries(BaseView):
+    """
+    End point to return ADS 2.0 libraries in a format that users can use to
+    import them to other services. Currently, the following third-party
+    services are supported:
+      - Zotero (https://www.zotero.org/)
+      - Papers (http://www.papersapp.com/)
+      - Mendeley (https://www.mendeley.com/)
+    """
+
+    decorators = [advertise('scopes', 'rate_limit')]
+    scopes = ['user']
+    rate_limit = [1000, 60*60*24]
+    export_types = ['zotero']
+
+    def get(self, export):
+        """
+        HTTP GET request that collects a users ADS 2.0 libraries from the flat
+        files on S3. It returns a file for download of the .bib format.
+
+        :param export: service to export to
+        :type export: str
+
+        Return data (on success)
+        ------------------------
+        BibTeX file (.bib)
+
+        HTTP Responses:
+        --------------
+        Succeed getting libraries: 200
+        User does not have a classic/ADS 2.0 account: 400
+        User does not have any libraries in their ADS 2.0 account: 400
+        Unknown error: 500
+
+        Any other responses will be default Flask errors
+        """
+        if export not in self.export_types:
+            return err(TWOPOINTOH_WRONG_EXPORT_TYPE)
+
+        if not current_app.config['ADS_TWO_POINT_OH_LOADED_USERS']:
+            current_app.logger.error(
+                'Users from MongoDB have not been loaded into the app'
+            )
+            return err(TWOPOINTOH_AWS_PROBLEM)
+
+        absolute_uid = self.helper_get_user_id()
+
+        try:
+            user = Users.query.filter(Users.absolute_uid == absolute_uid).one()
+        except NoResultFound:
+            current_app.logger.warning(
+                'User does not have an associated ADS Classic/2.0 account'
+            )
+            return err(NO_TWOPOINTOH_ACCOUNT)
+
+        library_file_name = current_app.config['ADS_TWO_POINT_OH_USERS'].get(
+            user.classic_email,
+            None
+        )
+
+        if not library_file_name:
+            current_app.logger.warning(
+                'User does not have any libraries in ADS 2.0'
+            )
+            return err(NO_TWOPOINTOH_LIBRARIES)
+
+        try:
+            libraries = TwoPointOhLibraries.get_s3_library(
+               library_file_name.replace('.json', '.tags.json')
+            )
+        except Exception as error:
+            current_app.logger.error(
+                'Unknown error with AWS: {}'.format(error)
+            )
+            return err(TWOPOINTOH_AWS_PROBLEM)
+
+        # Logic should go as follows:
+        #   1. Loop over each library
+        #   2. Obtain the BibTex for each library
+        #   3. Supplement each bibcode with its tag, using a reverse look-up
+        #   4. Add the library to an in-memory zip file
+        #   5. Return the zip
+
+        # Give the output in a zip file to download, using in-memory zip files
+        # and not have to write to disk
+        zip_io = StringIO()
+        zip_file = ZipFile(zip_io, 'a')
+
+        bibcode_regex = re.compile(r'ARTICLE{(.{19})')
+        keyword_regex = re.compile(r'keywords\s=\s{(.*)}')
+
+        for library in libraries:
+            bibcodes = {'bibcode': i for i in library['documents'].keys()}
+            bibcodes['sort'] = ['NONE']
+
+            r = client().post(
+                current_app.config['HARBOUR_EXPORT_SERVICE_URL'],
+                data=bibcodes
+            )
+
+            if r.status_code != 200:
+                current_app.logger.error(
+                    'Uknown error from export service: {}'.format(r.text)
+                )
+                return err(EXPORT_SERVICE_FAIL)
+
+            bibtex_out = []
+            bibtex = [i for i in r.json()['export'].split('\n\n') if i != '']
+            for btex in bibtex:
+
+                replace_string = []
+                bcode = bibcode_regex.search(btex).group(1)
+                tags = library['documents'][bcode]['tags']
+                notes = library['documents'][bcode]['notes']
+
+                if tags:
+                    try:
+                        new_keywords = keyword_regex.search(btex).group(1)
+                        tags.append(new_keywords)
+                        new_keywords = 'keywords = {{{kw}}}'.format(
+                            kw=', '.join(tags)
+                        )
+                        btex = keyword_regex.sub(new_keywords, btex)
+                    except AttributeError:
+                        replace_string.append(
+                            ',\n keywords = {{{tags}}}'.format(
+                                tags=', '.join(tags)
+                            )
+                        )
+
+                if notes:
+                    replace_string.append(
+                        ',\n notes = {{{notes}}}'.format(
+                            notes=', '.join(notes)
+                        )
+                    )
+
+                if replace_string:
+                    replace_string.append('\n}')
+                    bibtex_out.append(
+                        btex.replace(
+                            '\n}',
+                            ''.join(replace_string)
+                        )
+                    )
+                else:
+                    bibtex_out.append(btex)
+
+            zip_file.writestr(
+                '{}.bib'.format(library['name']),
+                (u''.join(bibtex_out)).encode('utf8')
+            )
+
+        zip_file.close()
+
+        username = user.classic_email.split('@')[0]
+        filename = '{username}_{export}.zip'.format(
+            username=username,
+            export=export
+        )
+
+        zip_io.seek(0)
+        return send_file(zip_io, attachment_filename=filename, as_attachment=True)
 
 
 class ClassicLibraries(BaseView):
