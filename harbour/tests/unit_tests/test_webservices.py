@@ -1,3 +1,4 @@
+# encoding: utf-8
 """
 Test webservices
 """
@@ -15,11 +16,15 @@ from harbour.models import db, Users
 from harbour.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
     CLASSIC_TIMEOUT, CLASSIC_BAD_MIRROR, CLASSIC_NO_COOKIE, \
     CLASSIC_UNKNOWN_ERROR, NO_CLASSIC_ACCOUNT, NO_TWOPOINTOH_LIBRARIES, \
-    NO_TWOPOINTOH_ACCOUNT, TWOPOINTOH_AWS_PROBLEM
+    NO_TWOPOINTOH_ACCOUNT, TWOPOINTOH_AWS_PROBLEM, EXPORT_SERVICE_FAIL, \
+    TWOPOINTOH_WRONG_EXPORT_TYPE
 from stub_response import ads_classic_200, ads_classic_unknown_user, \
     ads_classic_wrong_password, ads_classic_no_cookie, ads_classic_fail, \
-    ads_classic_libraries_200
+    ads_classic_libraries_200, export_success, export_success_no_keyword, \
+    export_fail
 from httmock import HTTMock
+from zipfile import ZipFile
+from StringIO import StringIO
 from requests.exceptions import Timeout
 
 
@@ -503,6 +508,264 @@ class TestADSTwoPointOhLibraries(TestBaseDatabase):
 
         self.assertStatus(r, TWOPOINTOH_AWS_PROBLEM['code'])
         self.assertEqual(r.json['error'], TWOPOINTOH_AWS_PROBLEM['message'])
+
+
+class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
+    """
+    Tests the end point that facilitates the export of libraries from ADS 2.0
+    to external third-party software.
+    """
+    @staticmethod
+    def helper_s3_mock_setup():
+        """
+        Setup the S3 buckets required for tests
+        """
+        # Stub data needed for create app
+        stub_mongogut_users = {
+            'user@ads.com': 'cb16a523-cdba-406b-bfff-edfd428248be.json'
+        }
+        stub_mongogut_library = [
+                {
+                    'name': 'Name',
+                    'description': 'Description',
+                    'documents': {
+                        '2015MNRAS.446.4239E': {
+                            'tags': ['tag1', 'tag2'],
+                            'notes': ['note1', 'note2']
+                        },
+                        '2015A&C....10...61E': {
+                            'tags': [],
+                            'notes': []
+                        }
+                    }
+                },
+                {
+                    'name': 'Name2',
+                    'description': 'Description2',
+                    'documents': {
+                        '2015MNRAS.446.4239E': {
+                            'tags': [],
+                            'notes': []
+                        },
+                        '2015A&C....10...61E': {
+                            'tags': [],
+                            'notes': []
+                        }
+                    }
+                }
+            ]
+
+        s3_resource = boto3.resource('s3')
+        s3_resource.create_bucket(Bucket='adsabs-mongogut')
+        bucket = s3_resource.Bucket('adsabs-mongogut')
+
+        # First is libraries
+        bucket.put_object(
+            Key='users.json',
+            Body=json.dumps(stub_mongogut_users)
+        )
+
+        # Second is the libraries
+        bucket.put_object(
+            Key='cb16a523-cdba-406b-bfff-edfd428248be.tags.json',
+            Body=json.dumps(stub_mongogut_library)
+        )
+
+    @mock_s3
+    def create_app(self):
+        """
+        Create the wsgi application
+        """
+        # Setup S3 mock data
+        TestExportADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        # Setup the app
+        app_ = create_app()
+        app_.config['CLASSIC_LOGGING'] = {}
+        app_.config['SQLALCHEMY_BINDS'] = {}
+        app_.config['ADS_CLASSIC_MIRROR_LIST'] = [
+            'mirror.com', 'other.mirror.com'
+        ]
+        app_.config['SQLALCHEMY_BINDS']['harbour'] = \
+            TestBaseDatabase.postgresql_url
+        app_.config['HARBOUR_EXPORT_SERVICE_URL'] = 'http://fakeapi.adsabs'
+
+        return app_
+
+    @mock_s3
+    def test_get_zotero_export_successfully(self):
+        """
+        Test that a user can get the expected zotero export. They press a
+        button, which results in a zip file being returned. Within the zip file
+        is a list of files, each one is a .bib file that corresponds to a
+        library that a user had.
+        """
+        # Stub out the user in the database
+        user = Users(
+            absolute_uid=10,
+            classic_email='user@ads.com',
+            classic_cookie='some cookie',
+            classic_mirror='other.mirror.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Setup S3 storage
+        TestExportADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        url = url_for('exporttwopointohlibraries', export='zotero')
+
+        with HTTMock(export_success):
+            r = self.client.get(
+                url,
+                headers={USER_ID_KEYWORD: user.absolute_uid}
+            )
+
+        self.assertStatus(r, 200)
+        self.assertIn('Content-Disposition', r.headers)
+        self.assertEqual(
+            r.headers['Content-Disposition'],
+            'attachment; filename=user_zotero.zip'
+        )
+
+        zip_file = ZipFile(StringIO(r.get_data()))
+        zip_content = {name: zip_file.read(name) for name in zip_file.namelist()}
+        self.assertEqual(
+            zip_content.keys(),
+            ['Name.bib', 'Name2.bib']
+        )
+
+        expected_keywords = '{tag1, tag2, gamma-ray burst: general, galaxies:' \
+                            ' high-redshift, cosmology: miscellaneous}'
+
+        self.assertIn(expected_keywords, zip_content['Name.bib'])
+        self.assertIn('notes = {note1, note2}', zip_content['Name.bib'])
+
+        self.assertNotIn('tag1', zip_content['Name2.bib'],)
+        self.assertNotIn('notes =', zip_content['Name2.bib'])
+
+    @mock_s3
+    def test_get_zotero_export_successfully_when_no_keyword(self):
+        """
+        Test that a user can get the expected zotero export. They press a
+        button, which results in a zip file being returned. Within the zip file
+        is a list of files, each one is a .bib file that corresponds to a
+        library that a user had.
+        """
+        # Stub out the user in the database
+        user = Users(
+            absolute_uid=10,
+            classic_email='user@ads.com',
+            classic_cookie='some cookie',
+            classic_mirror='other.mirror.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Setup S3 storage
+        TestExportADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        url = url_for('exporttwopointohlibraries', export='zotero')
+
+        with HTTMock(export_success_no_keyword):
+            r = self.client.get(
+                url,
+                headers={USER_ID_KEYWORD: user.absolute_uid}
+            )
+
+        self.assertStatus(r, 200)
+        self.assertIn('Content-Disposition', r.headers)
+        self.assertEqual(
+            r.headers['Content-Disposition'],
+            'attachment; filename=user_zotero.zip'
+        )
+
+        zip_file = ZipFile(StringIO(r.get_data()))
+        zip_content = {name: zip_file.read(name) for name in zip_file.namelist()}
+        self.assertEqual(
+            zip_content.keys(),
+            ['Name.bib', 'Name2.bib']
+        )
+
+        self.assertIn('keywords = {tag1, tag2}', zip_content['Name.bib'],)
+        self.assertIn('notes = {note1, note2}', zip_content['Name.bib'])
+
+        self.assertNotIn('tag1', zip_content['Name2.bib'],)
+        self.assertNotIn('notes =', zip_content['Name2.bib'])
+
+    @mock.patch('harbour.app.boto3.resource')
+    def test_get_export_end_point_when_aws_s3_error(self, mock_resource):
+        """
+        Test when there is an issue loading/accessing S3 storage
+        """
+        mock_resource.side_effect = Exception('Custom Error')
+
+        user = Users(
+            absolute_uid=10,
+            classic_cookie='ef9df8ds',
+            classic_mirror='mirror.com',
+            classic_email='user@ads.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        url = url_for('exporttwopointohlibraries', export='zotero')
+        r = self.client.get(url, headers={USER_ID_KEYWORD: user.absolute_uid})
+
+        self.assertStatus(r, TWOPOINTOH_AWS_PROBLEM['code'])
+        self.assertEqual(r.json['error'], TWOPOINTOH_AWS_PROBLEM['message'])
+
+    def test_get_libraries_end_point_when_users_have_not_loaded(self):
+        """
+        Test when this user has not got an associated ADS 2.0 (classic) account
+        """
+        self.assertTrue(self.app.config['ADS_TWO_POINT_OH_LOADED_USERS'])
+        self.app.config['ADS_TWO_POINT_OH_LOADED_USERS'] = False
+
+        url = url_for('exporttwopointohlibraries', export='zotero')
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+
+        self.assertStatus(r, TWOPOINTOH_AWS_PROBLEM['code'])
+        self.assertEqual(r.json['error'], TWOPOINTOH_AWS_PROBLEM['message'])
+
+    def test_user_requests_wrong_export_type(self):
+        """
+        The user should not receive anything if they request an export format
+        that does not exist
+        """
+        url = url_for('exporttwopointohlibraries', export='fudge')
+        r = self.client.get(url)
+
+        self.assertStatus(r, 400)
+        self.assertEqual(
+            r.json['error'],
+            TWOPOINTOH_WRONG_EXPORT_TYPE['message']
+        )
+
+    @mock_s3
+    def test_get_export_fails(self):
+        """
+        Tests the scenario when the export service crashes
+        """
+        # Stub out the user in the database
+        user = Users(
+            absolute_uid=10,
+            classic_email='user@ads.com',
+            classic_cookie='some cookie',
+            classic_mirror='other.mirror.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Setup S3 storage
+        TestExportADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        url = url_for('exporttwopointohlibraries', export='zotero')
+        with HTTMock(export_fail):
+            r = self.client.get(url, headers={USER_ID_KEYWORD: '10'})
+
+        self.assertStatus(r, 500)
+        self.assertEqual(r.json['error'], EXPORT_SERVICE_FAIL['message'])
 
 
 class TestClassicLibraries(TestBaseDatabase):

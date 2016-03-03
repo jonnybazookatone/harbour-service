@@ -1,10 +1,13 @@
+# encoding: utf-8
 """
 Mock responses to be used with HTTMock
 """
 
 from httmock import urlmatch
-from stub_data import stub_classic_success, stub_classic_unknown_user, stub_classic_wrong_password, \
-    stub_classic_no_cookie, stub_classic_libraries_success
+from stub_data import stub_classic_success, stub_classic_unknown_user, \
+    stub_classic_wrong_password, stub_classic_no_cookie, \
+    stub_classic_libraries_success, stub_export_success, \
+    stub_export_success_no_keyword
 
 
 @urlmatch(netloc=r'(.*\.)?mirror\.com')
@@ -68,4 +71,28 @@ def myads_fail(url, request):
     return {
         'status_code': 500,
         'content': 'Unknown error'
+    }
+
+
+@urlmatch(netloc=r'(.*\.)?fakeapi\.adsabs$')
+def export_success(url, request):
+    return {
+        'status_code': 200,
+        'content': stub_export_success
+    }
+
+
+@urlmatch(netloc=r'(.*\.)?fakeapi\.adsabs$')
+def export_success_no_keyword(url, request):
+    return {
+        'status_code': 200,
+        'content': stub_export_success_no_keyword
+    }
+
+
+@urlmatch(netloc=r'(.*\.)?fakeapi\.adsabs$')
+def export_fail(url, request):
+    return {
+        'status_code': 500,
+        'content': 'Fail'
     }

@@ -13,7 +13,9 @@ from flask.ext.restful import Api
 from flask.ext.discoverer import Discoverer
 from flask.ext.consulate import Consul, ConsulConnectionError
 from views import AuthenticateUser, AllowedMirrors, \
-    ClassicLibraries, ClassicUser, TwoPointOhLibraries
+    ClassicLibraries, ClassicUser, TwoPointOhLibraries, \
+    ExportTwoPointOhLibraries
+
 from models import db
 from StringIO import StringIO
 
@@ -54,6 +56,13 @@ def create_app():
         '/libraries/twopointoh/<int:uid>',
         methods=['GET']
     )
+
+    api.add_resource(
+        ExportTwoPointOhLibraries,
+        '/twopointoh/export/<export>',
+        methods=['GET']
+    )
+
     api.add_resource(ClassicUser, '/user', methods=['GET'])
     api.add_resource(AllowedMirrors, '/mirrors', methods=['GET'])
 

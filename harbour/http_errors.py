@@ -53,3 +53,13 @@ TWOPOINTOH_AWS_PROBLEM = dict(
     message='Unknown AWS problems',
     code=500
 )
+
+EXPORT_SERVICE_FAIL = dict(
+    message='Unknown failure from export-service',
+    code=500
+)
+
+TWOPOINTOH_WRONG_EXPORT_TYPE = dict(
+    message='This export type does not exist. See the API documentation: {0}'.format(API_HELP),
+    code=400
+)
