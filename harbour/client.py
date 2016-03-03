@@ -18,7 +18,7 @@ class Client:
         """
 
         self.session = requests.Session()
-        self.token = config.get('CLASSIC_SERVICE_ADSWS_API_TOKEN')
+        self.token = config.get('HARBOUR_SERVICE_ADSWS_API_TOKEN')
         if self.token:
             self.session.headers.update(
                 {'Authorization': 'Bearer {token}'.format(token=self.token)}
