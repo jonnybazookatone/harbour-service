@@ -2,6 +2,12 @@
 All notable changes to the config fileswill be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.0.4] - 2016-03-09
+### Added
+  
+  * Ability to export ADS2.0 library to Zotero format, in a zip file
+  * Tests included
+
 ## [1.0.3] - 2016-03-01
 ### Added
 
