@@ -23,6 +23,7 @@ class TestBase(TestCase):
         app_.config['ADS_CLASSIC_MIRROR_LIST'] = [
             'mirror.com', 'other.mirror.com'
         ]
+        app_.config['ADS_TWO_POINT_OH_MIRROR'] = 'mirror.com'
         app_.config['SQLALCHEMY_BINDS']['harbour'] = \
             TestBaseDatabase.postgresql_url
 
@@ -65,6 +66,11 @@ class TestBaseDatabase(TestBase):
             'classic_email': 'user@ads.com',
             'classic_password': 'password',
             'classic_mirror': 'mirror.com'
+        }
+
+        self.stub_user_data_2p0= {
+            'twopointoh_email': 'user@ads.com',
+            'twopointoh_password': 'password',
         }
 
     def tearDown(self):

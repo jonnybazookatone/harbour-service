@@ -19,9 +19,10 @@ class Users(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     absolute_uid = db.Column(db.Integer, unique=True, nullable=False)
-    classic_email = db.Column(db.String, nullable=False)
-    classic_mirror = db.Column(db.String, nullable=False)
-    classic_cookie = db.Column(db.String, nullable=False)
+    classic_email = db.Column(db.String, default='')
+    classic_mirror = db.Column(db.String, default='')
+    classic_cookie = db.Column(db.String, default='')
+    twopointoh_email = db.Column(db.String, default='')
 
     def __repr__(self):
         return '<' \
@@ -29,10 +30,12 @@ class Users(db.Model):
                'absolute_uid {1}, ' \
                'classic_cookie "{2}", ' \
                'classic_email "{3}", ' \
-               'classic_mirror "{4}"' \
+               'classic_mirror "{4}", ' \
+               'twopointoh_email "{5}"' \
                '>'\
             .format(self.id,
                     self.absolute_uid,
                     self.classic_cookie,
                     self.classic_email,
-                    self.classic_mirror)
+                    self.classic_mirror,
+                    self.twopointoh_email)

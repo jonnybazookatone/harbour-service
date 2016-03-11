@@ -84,7 +84,8 @@ class ClassicUser(BaseView):
             user = Users.query.filter(Users.absolute_uid == absolute_uid).one()
             return {
                 'classic_email': user.classic_email,
-                'classic_mirror': user.classic_mirror
+                'classic_mirror': user.classic_mirror,
+                'twopointoh_email': user.twopointoh_email
             }, 200
         except NoResultFound:
             return err(NO_CLASSIC_ACCOUNT)
@@ -192,14 +193,19 @@ class TwoPointOhLibraries(BaseView):
 
         try:
             user = Users.query.filter(Users.absolute_uid == uid).one()
+
+            # Have they got an email for ADS 2.0?
+            if not user.twopointoh_email:
+                raise NoResultFound
+
         except NoResultFound:
             current_app.logger.warning(
-                'User does not have an associated ADS Classic/2.0 account'
+                'User does not have an associated ADS 2.0 account'
             )
             return err(NO_TWOPOINTOH_ACCOUNT)
 
         library_file_name = current_app.config['ADS_TWO_POINT_OH_USERS'].get(
-            user.classic_email,
+            user.twopointoh_email,
             None
         )
 
@@ -269,6 +275,11 @@ class ExportTwoPointOhLibraries(BaseView):
 
         try:
             user = Users.query.filter(Users.absolute_uid == absolute_uid).one()
+
+            # Have they got an email for ADS 2.0?
+            if not user.twopointoh_email:
+                raise NoResultFound
+
         except NoResultFound:
             current_app.logger.warning(
                 'User does not have an associated ADS Classic/2.0 account'
@@ -276,7 +287,7 @@ class ExportTwoPointOhLibraries(BaseView):
             return err(NO_TWOPOINTOH_ACCOUNT)
 
         library_file_name = current_app.config['ADS_TWO_POINT_OH_USERS'].get(
-            user.classic_email,
+            user.twopointoh_email,
             None
         )
 
@@ -375,7 +386,7 @@ class ExportTwoPointOhLibraries(BaseView):
 
         zip_file.close()
 
-        username = user.classic_email.split('@')[0]
+        username = user.twopointoh_email.split('@')[0]
         filename = '{username}_{export}.zip'.format(
             username=username,
             export=export
@@ -423,6 +434,8 @@ class ClassicLibraries(BaseView):
 
         try:
             user = Users.query.filter(Users.absolute_uid == uid).one()
+            if not user.classic_email:
+                raise NoResultFound
         except NoResultFound:
             current_app.logger.warning(
                 'User does not have an associated ADS Classic account'
@@ -461,7 +474,7 @@ class ClassicLibraries(BaseView):
         return {'libraries': libraries}, 200
 
 
-class AuthenticateUser(BaseView):
+class AuthenticateUserClassic(BaseView):
     """
     End point to authenticate the user's ADS classic credentials with the
     external ADS Classic end point
@@ -619,5 +632,141 @@ class AuthenticateUser(BaseView):
             current_app.logger.warning(
                 'Credentials for "{email}" did not succeed at mirror "{mirror}"'
                 .format(email=classic_email, mirror=classic_mirror)
+            )
+            return err(CLASSIC_AUTH_FAILED)
+
+
+class AuthenticateUserTwoPointOh(BaseView):
+    """
+    End point to authenticate the user's ADS 2.0 credentials with the
+    external ADS Classic end point (2.0 and Classic accounts are on ADS 2.0,
+    interchangable)
+    """
+
+    decorators = [advertise('scopes', 'rate_limit')]
+    scopes = ['user']
+    rate_limit = [1000, 60*60*24]
+
+    def post(self):
+        """
+        HTTP POST request that receives the user's ADS 2.0 credentials, and
+        then contacts the Classic system to check that what the user provided is
+        indeed valid. If valid, the users ID is stored.
+
+        Post body:
+        ----------
+        KEYWORD, VALUE
+        twopointoh_email: <string> ADS 2.0 e-mail of the user
+        twopointoh_password: <string> ADS 2.0 password of the user
+
+        Return data (on success):
+        -------------------------
+        twopointoh_authed: <boolean> were they authenticated
+        twopointoh_email: <string> e-mail that authenticated correctly
+
+        HTTP Responses:
+        --------------
+        Succeed authentication: 200
+        Bad/malformed data: 400
+        User unknown/wrong password/failed authentication: 404
+        ADS Classic give unknown messages: 500
+        ADS Classic times out: 504
+
+        Any other responses will be default Flask errors
+        """
+        post_data = get_post_data(request)
+
+        # Collect the username, password from the request
+        try:
+            twopointoh_email = post_data['twopointoh_email']
+            twopointoh_password = post_data['twopointoh_password']
+        except KeyError:
+            current_app.logger.warning(
+                'User did not provide a required key: {}'
+                .format(traceback.print_exc())
+            )
+            return err(CLASSIC_DATA_MALFORMED)
+
+        # Create the correct URL
+        url = current_app.config['ADS_CLASSIC_URL'].format(
+            mirror=current_app.config['ADS_TWO_POINT_OH_MIRROR'],
+            email=twopointoh_email,
+            password=twopointoh_password
+        )
+
+        # Authenticate
+        current_app.logger.info(
+            'User "{email}" trying to authenticate"'
+            .format(email=twopointoh_email)
+        )
+        try:
+            response = requests.post(url)
+        except requests.exceptions.Timeout:
+            current_app.logger.warning(
+                'ADS Classic end point timed out, returning to user'
+            )
+            return err(CLASSIC_TIMEOUT)
+
+        if response.status_code >= 500:
+            message, status_code = err(CLASSIC_UNKNOWN_ERROR)
+            message['ads_classic'] = {
+                'message': response.text,
+                'status_code': response.status_code
+            }
+            current_app.logger.warning(
+                'ADS Classic has responded with an unknown error: {}'
+                .format(response.text)
+            )
+            return message, status_code
+
+        # Sanity check the response
+        email = response.json()['email']
+        if email != twopointoh_email:
+            current_app.logger.warning(
+                'User email "{}" does not match ADS return email "{}"'
+                .format(twopointoh_email, email)
+            )
+            return err(CLASSIC_AUTH_FAILED)
+
+        # Respond to the user based on whether they were successful or not
+        if response.status_code == 200 \
+                and response.json()['message'] == 'LOGGED_IN' \
+                and int(response.json()['loggedin']):
+            current_app.logger.info(
+                'Authenticated successfully "{email}"'
+                .format(email=twopointoh_email)
+            )
+
+            absolute_uid = self.helper_get_user_id()
+            try:
+                user = Users.query.filter(
+                    Users.absolute_uid == absolute_uid
+                ).one()
+
+                current_app.logger.info('User already exists in database')
+                user.twopointoh_email = twopointoh_email
+            except NoResultFound:
+                current_app.logger.info('Creating entry in database for user')
+                user = Users(
+                    absolute_uid=absolute_uid,
+                    twopointoh_email=twopointoh_email
+                )
+
+            db.session.add(user)
+            db.session.commit()
+
+            current_app.logger.info(
+                'Successfully saved content for "{}" to database'
+                .format(twopointoh_email)
+            )
+
+            return {
+                'twopointoh_email': email,
+                'twopointoh_authed': True
+            }, 200
+        else:
+            current_app.logger.warning(
+                'ADS 2.0 credentials for "{email}" did not succeed"'
+                .format(email=twopointoh_email)
             )
             return err(CLASSIC_AUTH_FAILED)

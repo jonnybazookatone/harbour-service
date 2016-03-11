@@ -12,8 +12,8 @@ from flask.ext.watchman import Watchman
 from flask.ext.restful import Api
 from flask.ext.discoverer import Discoverer
 from flask.ext.consulate import Consul, ConsulConnectionError
-from views import AuthenticateUser, AllowedMirrors, \
-    ClassicLibraries, ClassicUser, TwoPointOhLibraries, \
+from views import AuthenticateUserClassic, AuthenticateUserTwoPointOh, \
+    AllowedMirrors, ClassicLibraries, ClassicUser, TwoPointOhLibraries, \
     ExportTwoPointOhLibraries
 
 from models import db
@@ -45,7 +45,9 @@ def create_app():
     db.init_app(app)
 
     # Add the end resource end points
-    api.add_resource(AuthenticateUser, '/auth', methods=['POST'])
+    api.add_resource(AuthenticateUserClassic, '/auth/classic', methods=['POST'])
+    api.add_resource(AuthenticateUserTwoPointOh, '/auth/twopointoh', methods=['POST'])
+
     api.add_resource(
         ClassicLibraries,
         '/libraries/classic/<int:uid>',
@@ -59,7 +61,7 @@ def create_app():
 
     api.add_resource(
         ExportTwoPointOhLibraries,
-        '/twopointoh/export/<export>',
+        '/export/twopointoh/<export>',
         methods=['GET']
     )
 
