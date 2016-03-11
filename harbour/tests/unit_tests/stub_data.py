@@ -54,7 +54,7 @@ stub_classic_unknown_user = {
 }
 
 stub_classic_wrong_password = {
-      "email": "ads@user.com",
+      "email": "user@ads.com",
       "cookie": "50eefa48dc",
       "tmp_cookie": "",
       "openurl_srv": "",
@@ -67,7 +67,7 @@ stub_classic_wrong_password = {
       "message": "WRONG_PASSWORD",
       "request": {
           "man_cookie": "",
-          "man_email": "ads@user.com",
+          "man_email": "user@ads.com",
           "man_nemail": "",
           "man_passwd": "********",
           "man_npasswd": "",

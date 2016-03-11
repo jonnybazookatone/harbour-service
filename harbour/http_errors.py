@@ -5,7 +5,7 @@ HTTP Error messages
 API_HELP = 'http://adsabs.github.io/help/api/'
 
 CLASSIC_AUTH_FAILED = dict(
-    message='Classic ADS Authentification failed',
+    message='Authentification failed',
     code=404
 )
 

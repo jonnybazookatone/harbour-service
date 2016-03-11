@@ -2,6 +2,18 @@
 All notable changes to the config fileswill be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.0.5] - 2016-03-11
+### Added
+
+  * Authentication end point of ADS 2.0 users, stores email on success
+
+### Changes
+
+  * End points updated to have separate classic and 2.0 auth end points
+  * Extra logic added due to the exta fields in the model
+  * Models updated to include ADS 2.0 e-mail - migration of database
+  * README.md updated for new end point names
+
 ## [1.0.4] - 2016-03-09
 ### Added
   
