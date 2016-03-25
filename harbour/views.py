@@ -467,7 +467,7 @@ class ClassicLibraries(BaseView):
 
         libraries = [dict(
             name=i['name'],
-            description=i['desc'],
+            description=i.get('desc', ''),
             documents=[j['bibcode'] for j in i['entries']]
         ) for i in data['libraries']]
 
