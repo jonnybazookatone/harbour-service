@@ -772,6 +772,12 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
                     }
                 }
             ]
+        zip_io = StringIO()
+        zip_file = ZipFile(zip_io, 'a')
+        zip_file.writestr('Name.bib', 'keywords = {tag1, tag2}\nnotes = {note1, note2}')
+        zip_file.writestr('Name2.bib', '\nnotes')
+        zip_file.close()
+        zip_io.seek(0)
 
         s3_resource = boto3.resource('s3')
         s3_resource.create_bucket(Bucket='adsabs-mongogut')
@@ -785,8 +791,8 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
 
         # Second is the libraries
         bucket.put_object(
-            Key='cb16a523-cdba-406b-bfff-edfd428248be.tags.json',
-            Body=json.dumps(stub_mongogut_library)
+            Key='cb16a523-cdba-406b-bfff-edfd428248be.zotero.zip',
+            Body=zip_io.getvalue()
         )
 
     @mock_s3
@@ -801,13 +807,14 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         app_ = create_app()
         app_.config['CLASSIC_LOGGING'] = {}
         app_.config['SQLALCHEMY_BINDS'] = {}
+
         app_.config['ADS_CLASSIC_MIRROR_LIST'] = [
             'mirror.com', 'other.mirror.com'
         ]
         app_.config['SQLALCHEMY_BINDS']['harbour'] = \
             TestBaseDatabase.postgresql_url
         app_.config['HARBOUR_EXPORT_SERVICE_URL'] = 'http://fakeapi.adsabs'
-
+        app_.config['SQLALCHEMY_DATABASE_URI'] = app_.config['SQLALCHEMY_BINDS']['harbour']
         return app_
 
     @mock_s3
@@ -851,10 +858,7 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
             ['Name.bib', 'Name2.bib']
         )
 
-        expected_keywords = '{tag1, tag2, gamma-ray burst: general, galaxies:' \
-                            ' high-redshift, cosmology: miscellaneous}'
-
-        self.assertIn(expected_keywords, zip_content['Name.bib'])
+        self.assertIn('tag1, tag2', zip_content['Name.bib'])
         self.assertIn('notes = {note1, note2}', zip_content['Name.bib'])
 
         self.assertNotIn('tag1', zip_content['Name2.bib'],)
@@ -953,30 +957,6 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
             r.json['error'],
             TWOPOINTOH_WRONG_EXPORT_TYPE['message']
         )
-
-    @mock_s3
-    def test_get_export_fails(self):
-        """
-        Tests the scenario when the export service crashes
-        """
-        # Stub out the user in the database
-        user = Users(
-            absolute_uid=10,
-            twopointoh_email='user@ads.com'
-        )
-        db.session.add(user)
-        db.session.commit()
-
-        # Setup S3 storage
-        TestExportADSTwoPointOhLibraries.helper_s3_mock_setup()
-
-        url = url_for('exporttwopointohlibraries', export='zotero')
-        with HTTMock(export_fail):
-            r = self.client.get(url, headers={USER_ID_KEYWORD: '10'})
-
-        self.assertStatus(r, 500)
-        self.assertEqual(r.json['error'], EXPORT_SERVICE_FAIL['message'])
-
 
 class TestClassicLibraries(TestBaseDatabase):
     """
