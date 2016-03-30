@@ -262,7 +262,6 @@ class ExportTwoPointOhLibraries(BaseView):
     decorators = [advertise('scopes', 'rate_limit')]
     scopes = ['user']
     rate_limit = [1000, 60*60*24]
-    export_types = ['zotero']
 
     def get(self, export):
         """
@@ -285,7 +284,7 @@ class ExportTwoPointOhLibraries(BaseView):
 
         Any other responses will be default Flask errors
         """
-        if export not in self.export_types:
+        if export not in current_app.config['HARBOUR_EXPORT_TYPES']:
             return err(TWOPOINTOH_WRONG_EXPORT_TYPE)
 
         if not current_app.config['ADS_TWO_POINT_OH_LOADED_USERS']:
