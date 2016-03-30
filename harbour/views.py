@@ -161,6 +161,29 @@ class TwoPointOhLibraries(BaseView):
 
         return library
 
+    @staticmethod
+    def get_s3_raw_file(file_name):
+        """
+        Get the Zip file saved in s3 storage.
+
+        :param file_name: name of library file
+        :type file_name: str
+
+        :return: bytes
+        """
+        s3_resource = boto3.resource('s3')
+        bucket = s3_resource.Object(
+            current_app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
+            file_name
+        )
+        body = bucket.get()['Body']
+        data = StringIO()
+        for chunk in iter(lambda: body.read(1024), b''):
+            data.write(chunk)
+
+        data.seek(0)
+        return data
+
     def get(self, uid):
         """
         HTTP GET request that finds the libraries within ADS 2.0 for that user.
@@ -239,7 +262,6 @@ class ExportTwoPointOhLibraries(BaseView):
     decorators = [advertise('scopes', 'rate_limit')]
     scopes = ['user']
     rate_limit = [1000, 60*60*24]
-    export_types = ['zotero']
 
     def get(self, export):
         """
@@ -262,7 +284,7 @@ class ExportTwoPointOhLibraries(BaseView):
 
         Any other responses will be default Flask errors
         """
-        if export not in self.export_types:
+        if export not in current_app.config['HARBOUR_EXPORT_TYPES']:
             return err(TWOPOINTOH_WRONG_EXPORT_TYPE)
 
         if not current_app.config['ADS_TWO_POINT_OH_LOADED_USERS']:
@@ -298,8 +320,8 @@ class ExportTwoPointOhLibraries(BaseView):
             return err(NO_TWOPOINTOH_LIBRARIES)
 
         try:
-            libraries = TwoPointOhLibraries.get_s3_library(
-               library_file_name.replace('.json', '.tags.json')
+            zip_file = TwoPointOhLibraries.get_s3_raw_file(
+               library_file_name.replace('.json', '.{}.zip'.format(export))
             )
         except Exception as error:
             current_app.logger.error(
@@ -307,93 +329,13 @@ class ExportTwoPointOhLibraries(BaseView):
             )
             return err(TWOPOINTOH_AWS_PROBLEM)
 
-        # Logic should go as follows:
-        #   1. Loop over each library
-        #   2. Obtain the BibTex for each library
-        #   3. Supplement each bibcode with its tag, using a reverse look-up
-        #   4. Add the library to an in-memory zip file
-        #   5. Return the zip
-
-        # Give the output in a zip file to download, using in-memory zip files
-        # and not have to write to disk
-        zip_io = StringIO()
-        zip_file = ZipFile(zip_io, 'a')
-
-        bibcode_regex = re.compile(r'ARTICLE{(.{19})')
-        keyword_regex = re.compile(r'keywords\s=\s{(.*)}')
-
-        for library in libraries:
-            bibcodes = {'bibcode': i for i in library['documents'].keys()}
-            bibcodes['sort'] = ['NONE']
-
-            r = client().post(
-                current_app.config['HARBOUR_EXPORT_SERVICE_URL'],
-                data=bibcodes
-            )
-
-            if r.status_code != 200:
-                current_app.logger.error(
-                    'Uknown error from export service: {}'.format(r.text)
-                )
-                return err(EXPORT_SERVICE_FAIL)
-
-            bibtex_out = []
-            bibtex = [i for i in r.json()['export'].split('\n\n') if i != '']
-            for btex in bibtex:
-
-                replace_string = []
-                bcode = bibcode_regex.search(btex).group(1)
-                tags = library['documents'][bcode]['tags']
-                notes = library['documents'][bcode]['notes']
-
-                if tags:
-                    try:
-                        new_keywords = keyword_regex.search(btex).group(1)
-                        tags.append(new_keywords)
-                        new_keywords = 'keywords = {{{kw}}}'.format(
-                            kw=', '.join(tags)
-                        )
-                        btex = keyword_regex.sub(new_keywords, btex)
-                    except AttributeError:
-                        replace_string.append(
-                            ',\n keywords = {{{tags}}}'.format(
-                                tags=', '.join(tags)
-                            )
-                        )
-
-                if notes:
-                    replace_string.append(
-                        ',\n notes = {{{notes}}}'.format(
-                            notes=', '.join(notes)
-                        )
-                    )
-
-                if replace_string:
-                    replace_string.append('\n}')
-                    bibtex_out.append(
-                        btex.replace(
-                            '\n}',
-                            ''.join(replace_string)
-                        )
-                    )
-                else:
-                    bibtex_out.append(btex)
-
-            zip_file.writestr(
-                '{}.bib'.format(library['name']),
-                (u''.join(bibtex_out)).encode('utf8')
-            )
-
-        zip_file.close()
-
         username = user.twopointoh_email.split('@')[0]
         filename = '{username}_{export}.zip'.format(
             username=username,
             export=export
         )
 
-        zip_io.seek(0)
-        return send_file(zip_io, attachment_filename=filename, as_attachment=True)
+        return send_file(zip_file, attachment_filename=filename, as_attachment=True)
 
 
 class ClassicLibraries(BaseView):
