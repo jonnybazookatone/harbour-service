@@ -6,6 +6,7 @@ Test webservices
 import mock
 import json
 import boto3
+import unittest
 
 from moto import mock_s3
 from base import TestBaseDatabase
@@ -19,8 +20,7 @@ from harbour.http_errors import CLASSIC_AUTH_FAILED, CLASSIC_DATA_MALFORMED, \
     TWOPOINTOH_WRONG_EXPORT_TYPE
 from stub_response import ads_classic_200, ads_classic_unknown_user, \
     ads_classic_wrong_password, ads_classic_no_cookie, ads_classic_fail, \
-    ads_classic_libraries_200, export_success, export_success_no_keyword, \
-    export_fail
+    ads_classic_libraries_200, export_success, export_success_no_keyword
 from httmock import HTTMock
 from zipfile import ZipFile
 from StringIO import StringIO
@@ -742,42 +742,42 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         stub_mongogut_users = {
             'user@ads.com': 'cb16a523-cdba-406b-bfff-edfd428248be.json'
         }
-        stub_mongogut_library = [
-                {
-                    'name': 'Name',
-                    'description': 'Description',
-                    'documents': {
-                        '2015MNRAS.446.4239E': {
-                            'tags': ['tag1', 'tag2'],
-                            'notes': ['note1', 'note2']
-                        },
-                        '2015A&C....10...61E': {
-                            'tags': [],
-                            'notes': []
-                        }
-                    }
-                },
-                {
-                    'name': 'Name2',
-                    'description': 'Description2',
-                    'documents': {
-                        '2015MNRAS.446.4239E': {
-                            'tags': [],
-                            'notes': []
-                        },
-                        '2015A&C....10...61E': {
-                            'tags': [],
-                            'notes': []
-                        }
-                    }
-                }
-            ]
-        zip_io = StringIO()
-        zip_file = ZipFile(zip_io, 'a')
-        zip_file.writestr('Name.bib', 'keywords = {tag1, tag2}\nnotes = {note1, note2}')
-        zip_file.writestr('Name2.bib', '\nnotes')
-        zip_file.close()
-        zip_io.seek(0)
+        # stub_mongogut_library = [
+        #         {
+        #             'name': 'Name',
+        #             'description': 'Description',
+        #             'documents': {
+        #                 '2015MNRAS.446.4239E': {
+        #                     'tags': ['tag1', 'tag2'],
+        #                     'notes': ['note1', 'note2']
+        #                 },
+        #                 '2015A&C....10...61E': {
+        #                     'tags': [],
+        #                     'notes': []
+        #                 }
+        #             }
+        #         },
+        #         {
+        #             'name': 'Name2',
+        #             'description': 'Description2',
+        #             'documents': {
+        #                 '2015MNRAS.446.4239E': {
+        #                     'tags': [],
+        #                     'notes': []
+        #                 },
+        #                 '2015A&C....10...61E': {
+        #                     'tags': [],
+        #                     'notes': []
+        #                 }
+        #             }
+        #         }
+        #     ]
+        # zip_io = StringIO()
+        # zip_file = ZipFile(zip_io, 'a')
+        # zip_file.writestr('Name.bib', 'keywords = {tag1, tag2}\nnotes = {note1, note2}')
+        # zip_file.writestr('Name2.bib', '\nnotes')
+        # zip_file.close()
+        # zip_io.seek(0)
 
         s3_resource = boto3.resource('s3')
         s3_resource.create_bucket(Bucket='adsabs-mongogut')
@@ -790,10 +790,10 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         )
 
         # Second is the libraries
-        bucket.put_object(
-            Key='cb16a523-cdba-406b-bfff-edfd428248be.zotero.zip',
-            Body=zip_io.getvalue()
-        )
+        # bucket.put_object(
+        #     Key='cb16a523-cdba-406b-bfff-edfd428248be.zotero.zip',
+        #     Body=zip_io.getvalue()
+        # )
 
     @mock_s3
     def create_app(self):
@@ -818,6 +818,7 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         return app_
 
     @mock_s3
+    @unittest.skip('Deprecated')
     def test_get_zotero_export_successfully(self):
         """
         Test that a user can get the expected zotero export. They press a
@@ -865,6 +866,7 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         self.assertNotIn('notes =', zip_content['Name2.bib'])
 
     @mock_s3
+    @unittest.skip('Deprecated')
     def test_get_zotero_export_successfully_when_no_keyword(self):
         """
         Test that a user can get the expected zotero export. They press a
@@ -911,7 +913,7 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         self.assertNotIn('tag1', zip_content['Name2.bib'],)
         self.assertNotIn('notes =', zip_content['Name2.bib'])
 
-    @mock.patch('harbour.app.boto3.resource')
+    @mock.patch('harbour.views.boto3.client')
     def test_get_export_end_point_when_aws_s3_error(self, mock_resource):
         """
         Test when there is an issue loading/accessing S3 storage
@@ -950,13 +952,37 @@ class TestExportADSTwoPointOhLibraries(TestBaseDatabase):
         that does not exist
         """
         url = url_for('exporttwopointohlibraries', export='fudge')
-        r = self.client.get(url)
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
 
         self.assertStatus(r, 400)
         self.assertEqual(
             r.json['error'],
             TWOPOINTOH_WRONG_EXPORT_TYPE['message']
         )
+
+    @mock_s3
+    def test_get_temporary_url_on_export(self):
+        """
+        The user should receive a temporary url when asking for an export
+        """
+        # Stub out the user in the database
+        user = Users(
+            absolute_uid=10,
+            twopointoh_email='user@ads.com'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Setup S3 storage
+        TestExportADSTwoPointOhLibraries.helper_s3_mock_setup()
+
+        url = url_for('exporttwopointohlibraries', export='zotero')
+        r = self.client.get(url, headers={USER_ID_KEYWORD: 10})
+        self.assertIn(
+            'https://adsabs-mongogut.s3.amazonaws.com/cb16a523-cdba-406b-bfff-edfd428248be.zotero.zip',
+            r.json['url'],
+        )
+
 
 class TestClassicLibraries(TestBaseDatabase):
     """
