@@ -161,29 +161,6 @@ class TwoPointOhLibraries(BaseView):
 
         return library
 
-    @staticmethod
-    def get_s3_raw_file(file_name):
-        """
-        Get the Zip file saved in s3 storage.
-
-        :param file_name: name of library file
-        :type file_name: str
-
-        :return: bytes
-        """
-        s3_resource = boto3.resource('s3')
-        bucket = s3_resource.Object(
-            current_app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
-            file_name
-        )
-        body = bucket.get()['Body']
-        data = StringIO()
-        for chunk in iter(lambda: body.read(1024), b''):
-            data.write(chunk)
-
-        data.seek(0)
-        return data
-
     def get(self, uid):
         """
         HTTP GET request that finds the libraries within ADS 2.0 for that user.
@@ -320,8 +297,14 @@ class ExportTwoPointOhLibraries(BaseView):
             return err(NO_TWOPOINTOH_LIBRARIES)
 
         try:
-            zip_file = TwoPointOhLibraries.get_s3_raw_file(
-               library_file_name.replace('.json', '.{}.zip'.format(export))
+            s3 = boto3.client('s3')
+            s3_presigned_url = s3.generate_presigned_url(
+                ClientMethod='get_object',
+                Params={
+                    'Bucket': current_app.config['ADS_TWO_POINT_OH_S3_MONGO_BUCKET'],
+                    'Key': library_file_name.replace('.json', '.{}.zip'.format(export))
+                },
+                ExpiresIn=1800
             )
         except Exception as error:
             current_app.logger.error(
@@ -329,13 +312,7 @@ class ExportTwoPointOhLibraries(BaseView):
             )
             return err(TWOPOINTOH_AWS_PROBLEM)
 
-        username = user.twopointoh_email.split('@')[0]
-        filename = '{username}_{export}.zip'.format(
-            username=username,
-            export=export
-        )
-
-        return send_file(zip_file, attachment_filename=filename, as_attachment=True)
+        return {'url': s3_presigned_url}, 200
 
 
 class ClassicLibraries(BaseView):
