@@ -2,11 +2,12 @@
 All notable changes to the config fileswill be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.0.6] - ????-??-??
+## [1.0.6] - 2016-04-21
 
 ### Changes
   
   * Zip files are now created offline and are served as static files.
+  * AWS S3 temporary URLs are given to download statically created files.
   * ADS Classic may or may not give the description of a library, fix added.
 
 ## [1.0.5] - 2016-03-11
