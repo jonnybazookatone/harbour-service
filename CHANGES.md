@@ -2,6 +2,17 @@
 All notable changes to the config fileswill be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.0.8] - 2016-06-17
+
+  * Changed default config
+
+## [1.0.7] - 2016-06-17
+
+### Changes
+
+  * Modified the authentication end points to use params keywords when building the URL rather than doing it manual. This removes any encoding errors that may occur when building the URL manually.
+
+
 ## [1.0.6] - 2016-04-21
 
 ### Changes
