@@ -2,9 +2,6 @@
 ADS_CLASSIC_URL = 'http://{mirror}'
 ADS_CLASSIC_LIBRARIES_URL = 'http://{mirror}/cookie={cookie}'
 ADS_CLASSIC_MIRROR_LIST = [
-    'adstrio.cfa.harvard.edu',
-    'adsnun.cfa.harvard.edu',
-    'adsate.cfa.harvard.edu',
     'astrobib.u-strasbg.fr',
     'ads.nao.ac.jp',
     'ads.astro.puc.cl',
@@ -29,7 +26,7 @@ SQLALCHEMY_BINDS = {'harbour': ''}
 
 HARBOUR_SERVICE_ADSWS_API_TOKEN = ''
 HARBOUR_EXPORT_SERVICE_URL = 'http://fakeapi.adsabs.harvard.edu/v1/export'
-HARBOUR_EXPORT_TYPES = ['zotero']
+HARBOUR_EXPORT_TYPES = ['zotero', 'mendeley']
 
 HARBOUR_LOGGING = {
     'version': 1,
