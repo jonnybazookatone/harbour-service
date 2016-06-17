@@ -458,17 +458,23 @@ class AuthenticateUserClassic(BaseView):
         # Create the correct URL
         url = current_app.config['ADS_CLASSIC_URL'].format(
             mirror=classic_mirror,
-            email=classic_email,
-            password=classic_password
         )
+        params = {
+            'man_cmd': 'elogin',
+            'man_email': classic_email,
+            'man_passwd': classic_password
+        }
 
         # Authenticate
         current_app.logger.info(
             'User "{email}" trying to authenticate at mirror "{mirror}"'
-                .format(email=classic_email, mirror=classic_mirror)
+            .format(email=classic_email, mirror=classic_mirror)
         )
         try:
-            response = requests.post(url)
+            response = requests.post(
+                url,
+                params=params
+            )
         except requests.exceptions.Timeout:
             current_app.logger.warning(
                 'ADS Classic end point timed out, returning to user'
@@ -569,8 +575,8 @@ class AuthenticateUserTwoPointOh(BaseView):
     def post(self):
         """
         HTTP POST request that receives the user's ADS 2.0 credentials, and
-        then contacts the Classic system to check that what the user provided is
-        indeed valid. If valid, the users ID is stored.
+        then contacts the Classic system to check that what the user provided
+        is indeed valid. If valid, the users ID is stored.
 
         Post body:
         ----------
@@ -609,9 +615,12 @@ class AuthenticateUserTwoPointOh(BaseView):
         # Create the correct URL
         url = current_app.config['ADS_CLASSIC_URL'].format(
             mirror=current_app.config['ADS_TWO_POINT_OH_MIRROR'],
-            email=twopointoh_email,
-            password=twopointoh_password
         )
+        params = {
+            'man_cmd': 'elogin',
+            'man_email': twopointoh_email,
+            'man_passwd': twopointoh_password
+        }
 
         # Authenticate
         current_app.logger.info(
@@ -619,7 +628,10 @@ class AuthenticateUserTwoPointOh(BaseView):
             .format(email=twopointoh_email)
         )
         try:
-            response = requests.post(url)
+            response = requests.post(
+                url,
+                params=params
+            )
         except requests.exceptions.Timeout:
             current_app.logger.warning(
                 'ADS Classic end point timed out, returning to user'

@@ -1,4 +1,5 @@
-ADS_CLASSIC_URL = 'http://{mirror}/email={email}&password={password}'
+# encoding: utf-8
+ADS_CLASSIC_URL = 'http://{mirror}'
 ADS_CLASSIC_LIBRARIES_URL = 'http://{mirror}/cookie={cookie}'
 ADS_CLASSIC_MIRROR_LIST = [
     'adstrio.cfa.harvard.edu',
